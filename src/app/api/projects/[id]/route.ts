@@ -6,9 +6,11 @@
  * 说明：Next.js 15+ 动态路由参数为 Promise，必须 await。
  */
 import { NextResponse } from "next/server";
+import fs from "node:fs";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { deleteLocalVideo } from "@/lib/storage";
+import { exportAbsPath } from "@/lib/export-pipeline";
 
 /**
  * 查询项目详情（含转写结果）
@@ -72,8 +74,18 @@ export async function DELETE(
     return NextResponse.json({ error: "项目不存在" }, { status: 404 });
   }
 
-  await db.project.delete({ where: { id } }); // transcript 由 onDelete: Cascade 级联删除
+  // 磁盘文件先收集：导出产物（exports/{taskId}.mp4）与源视频
+  const exportFiles = await db.exportTask.findMany({
+    where: { projectId: id, outputKey: { not: null } },
+    select: { outputKey: true },
+  });
+
+  await db.project.delete({ where: { id } }); // transcript/exportTask 由 onDelete: Cascade 级联删除
   if (project.videoKey) await deleteLocalVideo(project.videoKey);
+  // 级联删除不会清理磁盘导出产物，这里逐个删除防孤儿文件
+  await Promise.all(
+    exportFiles.map((t) => fs.promises.unlink(exportAbsPath(t.outputKey!)).catch(() => {})),
+  );
 
   return NextResponse.json({ ok: true });
 }

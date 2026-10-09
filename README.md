@@ -19,8 +19,21 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **模块 ①**：登录/注册（短信验证码、会话、注册赠 30 分钟额度）
 - [x] **模块 ②**：上传 + 转写流水线（流式上传、FFmpeg 抽音频、ASR、LLM 润色、状态机）
 - [x] **模块 ③**：字幕编辑器（视频预览 + 逐行编辑 + 样式切换）
-- [ ] **模块 ④**：FFmpeg 烧录导出 + 额度扣减 + 激活码兑换
+- [x] **模块 ④**：FFmpeg 烧录导出 + 额度扣减 + 激活码兑换
 - [ ] **模块 ⑤**：支付接入 + 联调 + 部署上线
+
+### 导出与额度说明（模块 ④）
+
+- 烧录链路：样式契约 + 字幕分段 → [ass.ts](src/lib/ass.ts) 编译为 ASS（PlayRes 1920x1080，
+  关键词高亮用 `{\c}` 行内覆盖标签）→ FFmpeg `ass` 滤镜烧录（libx264 重编码、音频直拷）。
+  滤镜内使用相对路径，规避 Windows 盘符冒号转义问题
+- 任务化：`ExportTask` PENDING → PROCESSING → DONE/FAILED；同一项目同时只允许一个进行中任务（409）
+- 计费：按视频时长向上取整为秒；创建时余额预检（402），成功后在事务内
+  「任务置 DONE + 条件扣减余额（防负数）+ 写 CreditLedger(reason=CONSUME_EXPORT)」，
+  失败不扣费；删除项目时同步清理导出产物文件
+- 激活码（MVP 收款载体）：`node scripts/gen-redeem-codes.mjs --seconds 600 --count 5`
+  （或 `--plan 基础版`）生成 `SUBF-XXXX-XXXX-XXXX` 格式码；用户在 `/dashboard/redeem`
+  兑换，时长码直接入账、套餐码开月订阅，事务内防并发重兑
 
 ### 字幕编辑器说明（模块 ③）
 
@@ -67,12 +80,16 @@ npm run dev
 ## E2E 测试
 
 ```bash
-# 生成中文测试语音（Windows 自带 SAPI TTS，PowerShell）
-#   见 scripts/e2e-pipeline-test.mjs 头部注释
+# 全流程：登录 → 上传 → 轮询至 READY → 校验分段结构
 node scripts/e2e-pipeline-test.mjs
-```
 
-脚本流程：FFmpeg 合成测试视频 → 登录 → 流式上传 → 轮询至 READY → 校验分段结构并打印字幕。
+# 导出链路：生成激活码 → 兑换（含防刷 409/404）→ 创建导出 → 轮询至 DONE
+#           → 下载成片 → ffprobe 校验时长 → PSNR 验证字幕已烧录 → 扣费与流水校验
+node scripts/e2e-export-test.mjs
+
+# 生成激活码（落库并打印）
+node scripts/gen-redeem-codes.mjs --seconds 600 --count 5
+```
 
 ## 上线前 TODO
 

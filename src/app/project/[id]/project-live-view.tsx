@@ -129,7 +129,7 @@ export function ProjectLiveView({
             <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
         ) : (
-          <SubtitleEditor projectId={projectId} initialSegments={segments} />
+          <SubtitleEditor projectId={projectId} initialSegments={segments} durationSec={project.durationSec ?? 0} />
         ))}
     </div>
   );

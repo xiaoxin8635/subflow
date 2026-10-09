@@ -3,12 +3,15 @@
  * @file 字幕编辑器（客户端组件）
  * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换），右侧分段列表。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
- *         删除行、上方插入行、切换样式模板、保存（PUT 全量 segments）。
- *   依赖 API：GET /api/projects/[id]/video、PUT /api/projects/[id]/transcript、GET /api/styles。
+ *         删除行、上方插入行、切换样式模板、保存（PUT 全量 segments）、
+ *         导出成片（ExportCard：按当前样式 FFmpeg 烧录 + 额度扣减 + 下载）。
+ *   依赖 API：GET /api/projects/[id]/video、PUT /api/projects/[id]/transcript、
+ *             GET /api/styles、POST /api/projects/[id]/exports、GET /api/exports/[id]。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SubtitleOverlay, parseStyleConfig } from "@/components/subtitle-overlay";
 import type { StyleConfig } from "@/components/subtitle-overlay";
+import { ExportCard } from "./export-card";
 
 /** 编辑器使用的分段结构（keywords 由后端保证存在） */
 export interface EditorSegment {
@@ -37,13 +40,16 @@ function fmt(t: number): string {
  * 字幕编辑器组件
  * @param projectId       项目 ID（视频流/保存接口地址）
  * @param initialSegments 服务端首屏字幕分段
+ * @param durationSec     视频时长（秒），用于导出扣费展示
  */
 export function SubtitleEditor({
   projectId,
   initialSegments,
+  durationSec,
 }: {
   projectId: string;
   initialSegments: EditorSegment[];
+  durationSec: number;
 }) {
   const [segments, setSegments] = useState<EditorSegment[]>(initialSegments);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -206,6 +212,15 @@ export function SubtitleEditor({
           </div>
           <p className="mt-2 text-xs text-neutral-400">切换后立即在左侧预览，导出时将按所选样式烧录</p>
         </div>
+
+        {/* 导出卡片（按当前样式烧录，完成后可下载） */}
+        <ExportCard
+          projectId={projectId}
+          durationSec={durationSec}
+          styleId={activeStyleId}
+          styleName={styles.find((s) => s.id === activeStyleId)?.name ?? null}
+          dirty={dirty}
+        />
       </div>
 
       {/* ============ 右：分段列表 ============ */}

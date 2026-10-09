@@ -48,6 +48,10 @@ export default async function DashboardPage() {
               <span className="font-medium text-brand">
                 剩余额度 {formatSeconds(user.balanceSeconds)}
               </span>
+              <span className="mx-2 text-neutral-300">|</span>
+              <Link href="/dashboard/redeem" className="text-neutral-500 transition-colors hover:text-brand">
+                兑换额度
+              </Link>
             </div>
             <Link
               href="/dashboard/new"
