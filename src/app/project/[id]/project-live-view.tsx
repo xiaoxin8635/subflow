@@ -3,11 +3,13 @@
  * @file 项目实时视图（客户端轮询组件）
  * @description 接收服务端首屏数据，项目处于中间态（UPLOADED/TRANSCRIBING/POLISHING）时
  *              每 3 秒轮询 GET /api/projects/[id]，直至 READY/FAILED。
- *              READY 渲染分段字幕（时间戳 + 文本）；FAILED 渲染失败原因。
+ *              READY 渲染字幕编辑器（视频预览 + 逐行编辑 + 样式切换）。
  */
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@prisma/client";
 import { formatDuration, ProjectStatusBadge } from "@/components/project-status";
+import { SubtitleEditor } from "./subtitle-editor";
+import type { EditorSegment } from "./subtitle-editor";
 
 /** 详情接口返回的项目结构（与 /api/projects/[id] GET 响应一致） */
 export interface ProjectDetail {
@@ -69,11 +71,21 @@ export function ProjectLiveView({
     };
   }, [project.status, projectId]);
 
-  // 解析分段（JSON 存储按 unknown 读取，运行时校验形状）
-  const segments: SegmentRow[] = Array.isArray(project.transcript?.segments)
-    ? (project.transcript.segments as SegmentRow[]).filter(
-        (s) => typeof s?.start === "number" && typeof s?.end === "number" && typeof s?.text === "string",
-      )
+  // 解析分段（JSON 存储按 unknown 读取，运行时校验形状并补齐 keywords）
+  const segments: EditorSegment[] = Array.isArray(project.transcript?.segments)
+    ? (project.transcript.segments as SegmentRow[])
+        .filter(
+          (s) =>
+            typeof s?.start === "number" &&
+            typeof s?.end === "number" &&
+            typeof s?.text === "string",
+        )
+        .map((s) => ({
+          start: s.start,
+          end: s.end,
+          text: s.text,
+          keywords: Array.isArray(s.keywords) ? s.keywords : [],
+        }))
     : [];
 
   return (
@@ -110,30 +122,15 @@ export function ProjectLiveView({
         </div>
       )}
 
-      {/* 字幕分段列表（READY） */}
-      {project.status === "READY" && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-          {segments.length === 0 ? (
-            <p className="p-10 text-center text-sm text-neutral-500">未识别到字幕内容</p>
-          ) : (
-            <ol className="divide-y divide-neutral-100">
-              {segments.map((s, i) => (
-                <li key={i} className="flex gap-4 px-5 py-3 transition-colors hover:bg-neutral-50">
-                  <span className="mt-0.5 shrink-0 font-mono text-xs text-neutral-400">
-                    {String(Math.floor(s.start / 60)).padStart(2, "0")}:{String(Math.floor(s.start % 60)).padStart(2, "0")}
-                    {" → "}
-                    {String(Math.floor(s.end / 60)).padStart(2, "0")}:{String(Math.floor(s.end % 60)).padStart(2, "0")}
-                  </span>
-                  <span className="text-sm leading-6">{s.text}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-          <div className="border-t border-neutral-100 bg-neutral-50 px-5 py-3 text-xs text-neutral-400">
-            字幕编辑与样式功能将在下一模块上线
+      {/* 字幕编辑器（READY） */}
+      {project.status === "READY" &&
+        (segments.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
-        </div>
-      )}
+        ) : (
+          <SubtitleEditor projectId={projectId} initialSegments={segments} />
+        ))}
     </div>
   );
 }
