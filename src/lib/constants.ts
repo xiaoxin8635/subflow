@@ -24,11 +24,14 @@ export const ALLOWED_VIDEO_TYPES = [
 /** 大陆手机号格式（前后端共用同一正则，保证校验一致） */
 export const PHONE_RE = /^1[3-9]\d{9}$/;
 
-/** 上传 API 路由 */
+/** API 路由（前后端共用，避免硬编码路径漂移） */
 export const API_ROUTES = {
   sendSms: "/api/auth/sms",
   login: "/api/auth/login",
   logout: "/api/auth/logout",
   me: "/api/me",
-  upload: "/api/projects/upload",
+  projects: "/api/projects",
 } as const;
+
+/** 由项目 ID 拼接详情路由 */
+export const projectApi = (id: string): string => `/api/projects/${id}`;

@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 用户上传的视频（本地存储实现）
+/uploads/
+
+# E2E 测试媒体产物（由脚本/TTS 生成的音视频）
+/scripts/*.mp3
+/scripts/*.wav
+/scripts/*.mp4

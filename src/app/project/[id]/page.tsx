@@ -1,0 +1,57 @@
+/**
+ * @file 项目详情页（转写状态轮询 + 字幕分段展示）
+ * @description 服务端负责鉴权与首屏数据（未登录跳 /login，项目不存在/非本人 404）；
+ *              客户端组件 ProjectLiveView 负责轮询 GET /api/projects/[id]：
+ *              UPLOADED/TRANSCRIBING/POLISHING 每 3 秒刷新，READY 渲染分段字幕，
+ *              FAILED 显示失败原因与重试引导。编辑器在下一模块接入。
+ */
+import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { SiteHeader } from "@/components/site-header";
+import { ProjectLiveView } from "./project-live-view";
+
+/** 项目详情页入口（服务端首屏） */
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const { id } = await params;
+  const project = await db.project.findUnique({
+    where: { id },
+    include: { transcript: true },
+  });
+  // 不存在或非本人：404（与 API 行为一致，避免探测）
+  if (!project || project.userId !== user.id) notFound();
+
+  return (
+    <div className="flex min-h-screen flex-col bg-neutral-50">
+      <SiteHeader />
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+        <div className="text-sm text-neutral-500">
+          <Link href="/dashboard" className="transition-colors hover:text-brand">
+            ← 返回项目列表
+          </Link>
+        </div>
+        <ProjectLiveView
+          projectId={project.id}
+          initial={{
+            id: project.id,
+            title: project.title,
+            status: project.status,
+            durationSec: project.durationSec,
+            error: project.error,
+            transcript: project.transcript
+              ? {
+                  segments: project.transcript.segments,
+                  asrProvider: project.transcript.asrProvider,
+                  llmPolished: project.transcript.llmPolished,
+                }
+              : null,
+          }}
+        />
+      </main>
+    </div>
+  );
+}

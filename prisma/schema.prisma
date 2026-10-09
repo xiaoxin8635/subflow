@@ -115,6 +115,7 @@ model Project {
   videoKey    String? // 对象存储 key（生产：COS/OSS；本地：uploads/ 相对路径）
   videoName   String? // 原始文件名
   durationSec Float? // 视频时长（秒），由 FFmpeg 探测
+  error       String? // 流水线失败原因（status=FAILED 时展示给用户）
   language    String        @default("zh")
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

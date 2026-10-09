@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SubFlow（字幕工坊）
 
-## Getting Started
+AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LLM 润色 → 字幕编辑 → 一键烧录导出。
 
-First, run the development server:
+## 技术栈
+
+| 层 | 选型 |
+| --- | --- |
+| 框架 | Next.js 16（App Router + Turbopack + Cache Components） |
+| 语言 | TypeScript（strict） |
+| 数据库 | PostgreSQL 16（Docker）+ Prisma 6 |
+| ASR | 阿里云百炼 qwen3-asr-flash（同步）/ qwen3-asr-flash-filetrans（异步，生产） |
+| LLM 润色 | qwen-flash（DashScope OpenAI 兼容模式） |
+| 媒体处理 | FFmpeg（ffmpeg-static / ffprobe-static 自带二进制） |
+| 登录 | 手机号 + 短信验证码（开发模式万能码，生产对接阿里云短信） |
+
+## 模块进度
+
+- [x] **模块 ①**：登录/注册（短信验证码、会话、注册赠 30 分钟额度）
+- [x] **模块 ②**：上传 + 转写流水线（流式上传、FFmpeg 抽音频、ASR、LLM 润色、状态机）
+- [ ] **模块 ③**：字幕编辑器（视频预览 + 逐行编辑 + 样式切换）
+- [ ] **模块 ④**：FFmpeg 烧录导出 + 额度扣减 + 激活码兑换
+- [ ] **模块 ⑤**：支付接入 + 联调 + 部署上线
+
+## 本地开发
 
 ```bash
+# 1. 启动 PostgreSQL（首次）
+docker run -d --name subflow-db -e POSTGRES_PASSWORD=subflow123 -e POSTGRES_DB=subflow -p 5432:5432 postgres:16
+
+# 2. 安装依赖 + 初始化数据库
+npm install
+npx prisma db push
+npx tsx prisma/seed.mjs   # 写入套餐与字幕样式种子数据
+
+# 3. 配置 .env（参考 .env 内注释，必填 DASHSCOPE_API_KEY）
+
+# 4. 启动
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+登录页输入任意 11 位手机号，开发模式（`SMS_DEV_MODE=true`）固定验证码 `123456`，
+新用户自动注册并赠送 30 分钟转写额度。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ASR 双模式说明
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| 模式 | 变量值 | 时间戳 | 适用 |
+| --- | --- | --- | --- |
+| 同步 | `ASR_PROVIDER=qwen-sync` | FFmpeg 静音检测 + 文本对齐（估算） | 本地开发（无公网地址） |
+| 异步 | `ASR_PROVIDER=qwen-filetrans` | 原生句级毫秒时间戳 | 生产（需配置 `PUBLIC_ASSET_BASE_URL`，DashScope 会主动下载源文件） |
 
-## Learn More
+> 实测注意：qwen3-asr-flash 兼容模式的 `input_audio.data` 必须为
+> `data:audio/mp3;base64,...` 形式（裸 base64 会被误判为 URL），
+> 且 content 中不能携带 text part，否则报 `dedicated task asr does not support this input`。
 
-To learn more about Next.js, take a look at the following resources:
+## E2E 测试
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+# 生成中文测试语音（Windows 自带 SAPI TTS，PowerShell）
+#   见 scripts/e2e-pipeline-test.mjs 头部注释
+node scripts/e2e-pipeline-test.mjs
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+脚本流程：FFmpeg 合成测试视频 → 登录 → 流式上传 → 轮询至 READY → 校验分段结构并打印字幕。
 
-## Deploy on Vercel
+## 上线前 TODO
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [ ] 轮换 DashScope API Key（开发期间曾在聊天记录中暴露）
+- [ ] 阿里云短信签名/模板报备，关闭 `SMS_DEV_MODE`
+- [ ] ICP 备案 + 域名；补齐隐私协议 `/privacy`、用户协议 `/terms`
+- [ ] 生产切换 OSS 存储 + `ASR_PROVIDER=qwen-filetrans`
