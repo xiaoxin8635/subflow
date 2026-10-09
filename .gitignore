@@ -47,3 +47,8 @@ next-env.d.ts
 /scripts/*.mp3
 /scripts/*.wav
 /scripts/*.mp4
+
+# 真实样本视频与混流产物（scripts/samples/sample-test.mjs 使用）
+/scripts/samples/*.mp3
+/scripts/samples/*.wav
+/scripts/samples/*.mp4
