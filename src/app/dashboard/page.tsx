@@ -1,32 +1,55 @@
 /**
  * @file 工作台页面（项目列表）
- * @description 用户登录后的主界面：新建项目入口 + 项目列表。
- *              当前为骨架版：接入认证（middleware 保护）与项目查询 API 后，
- *              将改为服务端读取当前用户的项目数据并渲染真实列表。
+ * @description 服务端组件：未登录重定向到 /login；已登录显示脱敏手机号与剩余额度。
+ *              「新建项目」上传流程在下一模块（上传+转写流水线）接入。
  */
+import { redirect } from "next/navigation";
+import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { SiteHeader } from "@/components/site-header";
 
-/** 工作台入口组件（骨架版） */
-export default function DashboardPage() {
+/** 秒数格式化为「X 小时 Y 分钟」 */
+function formatSeconds(total: number): string {
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`;
+  if (minutes > 0) return `${minutes} 分钟`;
+  return `${total} 秒`;
+}
+
+/** 工作台入口组件 */
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50">
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10">
-        <div className="flex items-center justify-between">
+        {/* 用户信息条 */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">我的项目</h1>
             <p className="mt-1 text-sm text-neutral-500">
-              上传视频，AI 自动生成字幕（骨架版：功能开发中）
+              上传视频，AI 自动生成字幕
             </p>
           </div>
-          {/* TODO: 接入认证后显示剩余额度；点击触发上传流程 */}
-          <button
-            disabled
-            className="rounded-xl bg-brand px-5 py-2.5 font-medium text-white opacity-60"
-          >
-            + 新建项目
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl border border-black/5 bg-white px-4 py-2 text-sm shadow-sm">
+              <span className="text-neutral-500">{maskPhone(user.phone)}</span>
+              <span className="mx-2 text-neutral-300">|</span>
+              <span className="font-medium text-brand">
+                剩余额度 {formatSeconds(user.balanceSeconds)}
+              </span>
+            </div>
+            {/* TODO: 下一模块接入上传流程后启用 */}
+            <button
+              disabled
+              className="rounded-xl bg-brand px-5 py-2.5 font-medium text-white opacity-60"
+            >
+              + 新建项目
+            </button>
+          </div>
         </div>
 
         {/* 空状态占位 */}

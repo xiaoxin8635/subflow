@@ -21,6 +21,9 @@ export const ALLOWED_VIDEO_TYPES = [
   "video/webm",
 ] as const;
 
+/** 大陆手机号格式（前后端共用同一正则，保证校验一致） */
+export const PHONE_RE = /^1[3-9]\d{9}$/;
+
 /** 上传 API 路由 */
 export const API_ROUTES = {
   sendSms: "/api/auth/sms",

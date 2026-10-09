@@ -31,6 +31,7 @@ model User {
   subscriptions Subscription[]
   orders        Order[]
   creditLedger  CreditLedger[]
+  sessions      Session[]
 }
 
 // ---------------------------------------------------------------------
@@ -188,6 +189,35 @@ model RedeemCode {
   createdAt    DateTime   @default(now())
 
   @@index([status])
+}
+
+// ---------------------------------------------------------------------
+// 短信验证码：独立于用户表（未注册手机号也要能收码）；codeHash 存 SHA-256 哈希
+// ---------------------------------------------------------------------
+model SmsVerification {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String // SHA-256(验证码)，不存明文
+  expiresAt DateTime // 有效期 5 分钟
+  consumed  Boolean  @default(false) // 登录成功后置 true，防重放
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+}
+
+// ---------------------------------------------------------------------
+// 登录会话：随机 token 存库 + httpOnly Cookie，可随时吊销（登出/踢下线）
+// ---------------------------------------------------------------------
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique // SHA-256(session token)
+  expiresAt DateTime // 30 天有效期
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ----------------------------- 枚举定义 -----------------------------

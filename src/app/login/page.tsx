@@ -2,15 +2,12 @@
 /**
  * @file 登录页（手机号 + 短信验证码）
  * @description 客户端组件：手机号格式校验、验证码 60 秒倒计时、提交登录。
- *              依赖 API：POST /api/auth/sms（发码）、POST /api/auth/login（登录），
- *              后端接口在认证模块中实现。
+ *              依赖 API：POST /api/auth/sms（发码）、POST /api/auth/login（登录）。
  */
 
 import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-
-/** 大陆手机号格式 */
-const PHONE_RE = /^1[3-9]\d{9}$/;
+import { PHONE_RE } from "@/lib/constants";
 
 /** 登录页组件 */
 export default function LoginPage() {
