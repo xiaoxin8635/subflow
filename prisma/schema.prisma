@@ -1,0 +1,239 @@
+// =====================================================================
+// SubFlow（字幕工坊）- 数据库 Schema
+// 产品：AI 短视频字幕工具（上传视频 → ASR 转写 → LLM 润色 → 样式模板 → 导出）
+// 数据库：PostgreSQL 16（本地 Docker：subflow-db 容器）
+// 说明：
+//   - 时长类额度统一以「秒」为单位存储，避免浮点精度问题
+//   - segments 使用 Json 类型存储转写分段：[{ start, end, text, keywords[] }]
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// 用户：手机号登录，balanceSeconds 为剩余可用转写额度（秒）
+// ---------------------------------------------------------------------
+model User {
+  id            String   @id @default(cuid())
+  phone         String   @unique // 手机号（国内登录主键）
+  nickname      String?
+  balanceSeconds Int     @default(0) // 剩余额度（秒），注册赠送 + 购买/兑换累加
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  projects      Project[]
+  subscriptions Subscription[]
+  orders        Order[]
+  creditLedger  CreditLedger[]
+}
+
+// ---------------------------------------------------------------------
+// 套餐：月订阅计划（价格以「分」为单位存储，避免浮点误差）
+// ---------------------------------------------------------------------
+model Plan {
+  id             String  @id @default(cuid())
+  name           String // 套餐名，如「基础版」「专业版」
+  priceCents     Int // 月价（人民币分）
+  monthlySeconds Int // 每月包含的转写秒数
+  description    String?
+  isActive       Boolean @default(true) // 是否在售
+
+  subscriptions Subscription[]
+  orders        Order[]
+}
+
+// ---------------------------------------------------------------------
+// 订阅记录：一个用户同一时间可有多条历史记录，以 expireAt 判断有效性
+// ---------------------------------------------------------------------
+model Subscription {
+  id        String    @id @default(cuid())
+  userId    String
+  planId    String
+  startAt   DateTime
+  expireAt  DateTime
+  status    SubStatus @default(ACTIVE)
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId, status])
+}
+
+// ---------------------------------------------------------------------
+// 订单：MVP 阶段走激活码（REDEEM）与手动开通（MANUAL），后续接微信支付（WX_NATIVE）
+// ---------------------------------------------------------------------
+model Order {
+  id              String       @id @default(cuid())
+  userId          String
+  planId          String? // 关联套餐（赠送类订单可为空）
+  amountCents     Int          @default(0) // 实付金额（分），0 = 免费/兑换
+  status          OrderStatus  @default(PENDING)
+  channel         OrderChannel @default(MANUAL)
+  wxTransactionId String?      @unique // 微信支付交易号（预留）
+  paidAt          DateTime?
+  createdAt       DateTime     @default(now())
+
+  user User  @relation(fields: [userId], references: [id])
+  plan Plan? @relation(fields: [planId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------
+// 额度流水：所有 balanceSeconds 的变动必须留痕（赠送/消耗/兑换/管理员调整）
+// ---------------------------------------------------------------------
+model CreditLedger {
+  id            String   @id @default(cuid())
+  userId        String
+  changeSeconds Int // 正数=增加，负数=消耗
+  balanceAfter  Int // 变动后的余额快照
+  reason        String // SIGNUP_BONUS / CONSUME_TRANSCRIBE / REDEEM / ADMIN_ADJUST ...
+  refId         String? // 关联业务 ID（如 projectId / orderId）
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------
+// 视频项目：核心业务实体，status 描述流水线阶段
+// ---------------------------------------------------------------------
+model Project {
+  id          String        @id @default(cuid())
+  userId      String
+  title       String // 默认取文件名
+  status      ProjectStatus @default(UPLOADED)
+  videoKey    String? // 对象存储 key（生产：COS/OSS；本地：uploads/ 相对路径）
+  videoName   String? // 原始文件名
+  durationSec Float? // 视频时长（秒），由 FFmpeg 探测
+  language    String        @default("zh")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id])
+  transcript  Transcript?
+  exportTasks ExportTask[]
+
+  @@index([userId, updatedAt])
+}
+
+// ---------------------------------------------------------------------
+// 转写结果：与项目一对一；segments 为润色后的分段（含关键词高亮标记）
+// ---------------------------------------------------------------------
+model Transcript {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  segments    Json // [{ start, end, text, keywords: ["xxx"] }]
+  rawText     String? // ASR 原始全文（润色前留底）
+  asrProvider String? // 使用的 ASR 服务标识（paraformer / local-whisper ...）
+  llmPolished Boolean  @default(false) // 是否已经过 LLM 润色
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------
+// 字幕样式模板：config 存 JSONB 样式配置（字体/颜色/描边/位置/高亮色等）
+// ---------------------------------------------------------------------
+model Style {
+  id        String   @id @default(cuid())
+  name      String
+  config    Json // 样式配置，结构与前端渲染器和 FFmpeg ASS 生成器约定一致
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  exportTasks ExportTask[]
+}
+
+// ---------------------------------------------------------------------
+// 导出任务：FFmpeg 烧录字幕为异步任务
+// ---------------------------------------------------------------------
+model ExportTask {
+  id         String     @id @default(cuid())
+  projectId  String
+  styleId    String?
+  resolution String     @default("720p")
+  status     TaskStatus @default(PENDING)
+  outputKey  String? // 导出产物的存储 key
+  error      String? // 失败原因
+  createdAt  DateTime   @default(now())
+  finishedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  style   Style?  @relation(fields: [styleId], references: [id])
+
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------
+// 激活码：MVP 无支付资质阶段的收款载体（手动收款 → 发码 → 用户兑换）
+// ---------------------------------------------------------------------
+model RedeemCode {
+  id           String     @id @default(cuid())
+  code         String     @unique // 激活码本体（生成时保证唯一性）
+  planId       String? // 兑换后开通的套餐（二选一：套餐 or 直接送时长）
+  bonusSeconds Int? // 直接赠送的额度秒数
+  status       CodeStatus @default(UNUSED)
+  usedBy       String? // 兑换用户 ID
+  usedAt       DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([status])
+}
+
+// ----------------------------- 枚举定义 -----------------------------
+
+/// 项目状态机：UPLOADED → TRANSCRIBING → POLISHING → READY / FAILED
+enum ProjectStatus {
+  UPLOADED
+  TRANSCRIBING
+  POLISHING
+  READY
+  FAILED
+}
+
+/// 通用异步任务状态（导出任务用）
+enum TaskStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+/// 订单状态
+enum OrderStatus {
+  PENDING
+  PAID
+  CLOSED
+  REFUNDED
+}
+
+/// 支付渠道：MANUAL=手动开通，WX_NATIVE=微信扫码（预留），REDEEM=激活码兑换
+enum OrderChannel {
+  MANUAL
+  WX_NATIVE
+  REDEEM
+}
+
+/// 订阅状态
+enum SubStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+/// 激活码状态
+enum CodeStatus {
+  UNUSED
+  USED
+  DISABLED
+}
