@@ -121,3 +121,33 @@ export async function enqueueExport(taskId: string, userId: string): Promise<boo
     return false;
   }
 }
+
+/**
+ * 移除队列中的旧 job（管理后台重试前调用）
+ * @description BullMQ 对同 jobId 的已存在 job（含 failed/completed set 中的）
+ *              不会重新创建——重试必须先移除旧 job 再入队，重试次数随之重置。
+ *              已终态失败的 job 处于 failed set，remove 安全；job 不存在时静默跳过。
+ * @param queueName 队列名（TRANSCRIPT_QUEUE_NAME / EXPORT_QUEUE_NAME）
+ * @param jobId     任务 ID（如 `transcribe-${projectId}`）
+ */
+export async function removeQueueJob(queueName: string, jobId: string): Promise<void> {
+  try {
+    const queue = getQueue(queueName);
+    const job = await queue.getJob(jobId);
+    if (job) await job.remove();
+  } catch (e) {
+    console.warn("[queue] 移除旧任务失败（忽略）：", e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * 获取队列失败任务数（管理后台展示；Redis 不可用返回 null）
+ * @param queueName 队列名
+ */
+export async function queueFailedCount(queueName: string): Promise<number | null> {
+  try {
+    return await getQueue(queueName).getFailedCount();
+  } catch {
+    return null;
+  }
+}

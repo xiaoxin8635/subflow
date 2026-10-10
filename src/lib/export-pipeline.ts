@@ -19,6 +19,8 @@ import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
+import { sendAlert } from "@/lib/alert";
 import { buildAss } from "@/lib/ass";
 import { enqueueExport } from "@/lib/queue/queues";
 import { ensureLocalVideo, isOss, removeLocalVideoCache } from "@/lib/storage";
@@ -176,7 +178,13 @@ export async function processExport(taskId: string): Promise<void> {
       });
       if (deducted.count !== 1) {
         // 创建接口已做余额预检，走到这里说明预检后余额被并发消耗；产物作废不交付
-        throw new Error(`额度不足（导出需 ${costSeconds} 秒，余额在任务执行期间被其他消耗占用）`);
+        const message = `额度不足（导出需 ${costSeconds} 秒，余额在任务执行期间被其他消耗占用）`;
+        logger.warn("export", "额度守卫拦截（疑似并发消耗竞态）", { taskId, userId: project.userId, costSeconds });
+        void sendAlert("quota-guard", "额度守卫拦截：预检后余额被并发消耗", [
+          `任务：${taskId}`,
+          `需扣：${costSeconds} 秒`,
+        ]);
+        throw new Error(message);
       }
       const user = await tx.user.findUnique({ where: { id: project.userId } });
       await tx.creditLedger.create({
@@ -193,7 +201,7 @@ export async function processExport(taskId: string): Promise<void> {
         data: { status: "DONE", outputKey: `${EXPORTS_SUBDIR}/${taskId}.mp4`, finishedAt: new Date(), error: null },
       });
     });
-    console.log(`[export] 任务 ${taskId} 完成：${project.title}，扣费 ${costSeconds} 秒`);
+    logger.info("export", "导出任务完成", { taskId, title: project.title, costSeconds });
     // ⑤ oss 模式：事务成功后清理本地成片与源视频缓存副本（源视频保留在 OSS 供预览/再导出）
     if (isOss()) {
       await fs.unlink(outAbsPath).catch(() => {});

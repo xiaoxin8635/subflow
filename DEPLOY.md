@@ -26,6 +26,7 @@
 - 应用以 `output: "standalone"` 产物运行，自带 ffmpeg/ffprobe 二进制，宿主机无需安装
 - 数据库结构同步由一次性 `migrate` 容器执行（`prisma db push`，幂等）
 - `STORAGE_DRIVER=oss` 时上传/预览/下载流量直达 OSS，服务器带宽只承载网页与 API（强烈推荐生产启用）
+- 告警：配置钉钉机器人 webhook 后，任务最终失败/额度异常/进程崩溃会推送到你的钉钉群（未配置仅落日志，不影响运行）
 
 ## ① 购买服务器与域名
 
@@ -115,6 +116,11 @@ apt install -y caddy && systemctl reload caddy
 - [ ] **启用 OSS 直传**：`STORAGE_DRIVER=oss` + `npx tsx scripts/setup-oss-cors.ts`（见③末尾），
       消灭上传/下载带宽瓶颈；备案后可把 `OSS_PUBLIC_BASE` 绑 CDN 域名加速
 - [ ] **管理后台**：`ADMIN_PHONES` 填你自己的手机号，登录后访问 `/admin` 生成激活码
+- [ ] **钉钉告警**（推荐）：钉钉建群 → 群设置 → 机器人 → 添加「自定义」机器人 →
+      安全设置选「加签」，把 Webhook 与 SEC 密钥填入 `.env` 的
+      `ALERT_DINGTALK_WEBHOOK` / `ALERT_DINGTALK_SECRET`。
+      配置后任务最终失败、额度异常、进程崩溃会实时推送到你的钉钉群；
+      `/admin` 后台底部还有失败任务列表可一键重试
 - [ ] **收款码**：把个人微信/支付宝收款码截图放到 `public/pay-qr/wechat.png`、`alipay.png`，
       确认 `/pricing` 页正常显示后重新 `docker compose up -d --build`
 - [ ] **法务页**：`/privacy` 与 `/terms` 页面已内置，上线前把条款中的主体名称、联系方式替换为真实信息；`NEXT_PUBLIC_ICP_BEIAN` 填备案号（页脚自动展示，ICP 备案要求网站底部展示备案号）
@@ -124,7 +130,7 @@ apt install -y caddy && systemctl reload caddy
 ## 日常运维
 
 ```bash
-docker compose logs -f app        # 看应用日志（Web/入队/限流）
+docker compose logs -f app        # 看应用日志（Web/入队/限流；关键路径为 JSON 结构化行）
 docker compose logs -f worker     # 看 Worker 日志（转写/导出执行、重试与死信）
 docker compose restart app        # 重启应用（更新 .env 后需要）
 docker compose restart worker     # 重启 Worker（在跑任务会 stalled 自动重试，不丢）

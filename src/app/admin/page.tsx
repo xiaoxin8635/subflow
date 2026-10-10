@@ -2,7 +2,8 @@
  * @file 管理后台（/admin，服务端壳）
  * @description 仅 ADMIN_PHONES 白名单用户可见（其余一律 404，不暴露后台存在）。
  *              页面组成：经营统计卡片、发码表单（客户端组件 AdminCodeForm）、
- *              未用激活码列表、用户总览。数据服务端直查，无需额外 GET API。
+ *              未用激活码列表、失败任务列表（客户端组件 AdminFailures，
+ *              含一键重试）、用户总览。数据服务端直查，无需额外 GET API。
  */
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -10,7 +11,9 @@ import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { isAdminPhone } from "@/lib/admin";
 import { SiteHeader } from "@/components/site-header";
 import { formatDuration } from "@/components/project-status";
+import { TRANSCRIPT_QUEUE_NAME, EXPORT_QUEUE_NAME, queueFailedCount } from "@/lib/queue/queues";
 import { AdminCodeForm } from "./admin-code-form";
+import { AdminFailures } from "./admin-failures";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染
 export const instant = false;
@@ -47,6 +50,24 @@ export default async function AdminPage() {
       },
     }),
     db.plan.findMany({ where: { isActive: true }, orderBy: { priceCents: "asc" } }),
+  ]);
+
+  // 失败任务（P1.6 可观测性）：DB 终态失败记录 + 队列侧 failed 积压数
+  const [failedProjects, failedExports, transcriptFailed, exportFailed] = await Promise.all([
+    db.project.findMany({
+      where: { status: "FAILED" },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, title: true, error: true, createdAt: true },
+    }),
+    db.exportTask.findMany({
+      where: { status: "FAILED" },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, error: true, createdAt: true, project: { select: { title: true } } },
+    }),
+    queueFailedCount(TRANSCRIPT_QUEUE_NAME),
+    queueFailedCount(EXPORT_QUEUE_NAME),
   ]);
 
   /** 套餐名映射（码列表展示用） */
@@ -102,6 +123,23 @@ export default async function AdminPage() {
             </ul>
           )}
         </section>
+
+        {/* 失败任务（含重试按钮） */}
+        <AdminFailures
+          projects={failedProjects.map((p) => ({
+            id: p.id,
+            title: p.title,
+            error: p.error ?? "",
+            createdAt: p.createdAt.toISOString(),
+          }))}
+          exports={failedExports.map((t) => ({
+            id: t.id,
+            projectTitle: t.project.title,
+            error: t.error ?? "",
+            createdAt: t.createdAt.toISOString(),
+          }))}
+          queueFailed={{ transcript: transcriptFailed, export: exportFailed }}
+        />
 
         {/* 用户总览 */}
         <section className="mt-8">

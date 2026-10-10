@@ -24,6 +24,8 @@ function loadDotEnv(): void {
 /** 启动 Worker 并注册优雅退出信号处理 */
 async function main(): Promise<void> {
   loadDotEnv();
+  const { installProcessErrorHooks } = await import("../lib/process-hooks");
+  await installProcessErrorHooks();
   const { createSubflowWorkers } = await import("../lib/queue/workers");
   const handle = createSubflowWorkers();
 

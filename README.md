@@ -29,6 +29,8 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **P1 OSS 直传**（`docs/ROADMAP.md` 2.2）：`STORAGE_DRIVER=oss` 时浏览器分片
       直传 OSS（不经服务器带宽），worker 处理前拉取、成片传回 OSS，
       预览/下载 302 签名 URL；local 驱动保留，双模式全链路 E2E 验证
+- [x] **P1 可观测性**（`docs/ROADMAP.md` 2.6）：结构化 JSON 日志 + 钉钉机器人告警
+      （任务最终失败/额度守卫/进程异常）+ 管理后台失败任务页与一键重试
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -77,6 +79,18 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
     qwen-filetrans 转写直接用 12h 签名 URL，无需 `PUBLIC_ASSET_BASE_URL`
 - 首次启用：`npx tsx scripts/setup-oss-cors.ts` 配置 Bucket CORS（浏览器直传必需）；
   OSS 客户端为自研零依赖实现（[src/lib/oss.ts](src/lib/oss.ts)，V1 签名 + Multipart + 签名 URL）
+
+### 可观测性说明（P1.6）
+
+- **结构化日志**（[src/lib/logger.ts](src/lib/logger.ts)）：worker/导出/告警等关键路径
+  输出单行 JSON（时间/级别/模块/消息/上下文），`docker logs` 可直接采集
+- **钉钉告警**（[src/lib/alert.ts](src/lib/alert.ts)）：配置 `ALERT_DINGTALK_WEBHOOK`
+  （+加签密钥）后，转写/导出任务重试用尽失败、额度守卫拦截、进程未捕获异常时推送
+  群机器人；同类告警冷却限频（`ALERT_COOLDOWN_SECONDS`，默认 300s）；未配置时降级为日志
+- **进程级捕获**（[src/lib/process-hooks.ts](src/lib/process-hooks.ts)）：app 进程
+  （instrumentation）与独立 Worker 进程均挂 `uncaughtException` / `unhandledRejection`
+- **失败任务页**：`/admin` 底部展示 FAILED 项目/导出任务（最近 20 条）与队列积压数，
+  每条可一键重试（`POST /api/admin/retry`：移除旧 failed job → 重置状态 → 重新入队）
 
 ## 部署
 
@@ -153,6 +167,10 @@ node scripts/e2e-queue-test.mjs
 # P1.2 OSS 直传专项：STORAGE_DRIVER=oss 时运行（整传禁用 → 分片直传 → 转写
 # → 预览 302 → 导出下载 302 → 扣费 → 删除清理）
 node scripts/e2e-oss-test.mjs
+
+# P1.6 可观测性专项：告警收发+冷却（本地 webhook 模拟）→ 权限 → 无音轨视频
+# 制造真实失败 → admin 失败重试闭环（运行约 3-5 分钟，含重试退避等待）
+node scripts/e2e-observability-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts

@@ -11,6 +11,8 @@
 import { Worker, type Job } from "bullmq";
 import Redis from "ioredis";
 import { TRANSCRIPT_QUEUE_NAME, EXPORT_QUEUE_NAME } from "@/lib/queue/queues";
+import { logger } from "@/lib/logger";
+import { sendAlert } from "@/lib/alert";
 import { processProject, markProjectFailed } from "@/lib/pipeline";
 import { processExport, markExportFailed } from "@/lib/export-pipeline";
 
@@ -50,14 +52,22 @@ export function createSubflowWorkers(): { close(): Promise<void> } {
   transcriptWorker.on("failed", async (job, err) => {
     if (!job) return;
     if (!isExhausted(job)) {
-      console.warn(
-        `[worker] 转写任务第 ${job.attemptsMade}/${job.opts.attempts} 次失败，将自动重试：project=${job.data.projectId}`,
-        err.message,
-      );
+      logger.warn("worker", "转写任务失败，将自动重试", {
+        attempt: `${job.attemptsMade}/${job.opts.attempts}`,
+        projectId: job.data.projectId,
+        error: err.message,
+      });
       return;
     }
-    console.error(`[worker] 转写任务最终失败（死信落库）：project=${job.data.projectId}`, err.message);
+    logger.error("worker", "转写任务最终失败（死信落库）", {
+      projectId: job.data.projectId,
+      error: err.message,
+    });
     await markProjectFailed(job.data.projectId as string, err.message);
+    await sendAlert("transcribe-failed", "转写任务最终失败（重试用尽）", [
+      `项目：${job.data.projectId}`,
+      `原因：${err.message}`,
+    ]);
   });
 
   /** 导出 Worker：FFmpeg 吃 CPU，默认并发 1（可用 env 调大） */
@@ -69,19 +79,29 @@ export function createSubflowWorkers(): { close(): Promise<void> } {
   exportWorker.on("failed", async (job, err) => {
     if (!job) return;
     if (!isExhausted(job)) {
-      console.warn(
-        `[worker] 导出任务第 ${job.attemptsMade}/${job.opts.attempts} 次失败，将自动重试：task=${job.data.taskId}`,
-        err.message,
-      );
+      logger.warn("worker", "导出任务失败，将自动重试", {
+        attempt: `${job.attemptsMade}/${job.opts.attempts}`,
+        taskId: job.data.taskId,
+        error: err.message,
+      });
       return;
     }
-    console.error(`[worker] 导出任务最终失败（死信落库）：task=${job.data.taskId}`, err.message);
+    logger.error("worker", "导出任务最终失败（死信落库）", {
+      taskId: job.data.taskId,
+      error: err.message,
+    });
     await markExportFailed(job.data.taskId as string, err.message);
+    await sendAlert("export-failed", "导出任务最终失败（重试用尽）", [
+      `任务：${job.data.taskId}`,
+      `原因：${err.message}`,
+    ]);
   });
 
-  console.log(
-    `[worker] 已启动：transcript 并发=${transcriptConcurrency}，export 并发=${exportConcurrency}，redis=${url}`,
-  );
+  logger.info("worker", "已启动", {
+    transcriptConcurrency,
+    exportConcurrency,
+    redis: url,
+  });
 
   return {
     /** 优雅退出：停止取新任务，等待在跑任务完成（调用方可叠加超时） */
