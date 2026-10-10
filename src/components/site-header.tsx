@@ -27,7 +27,7 @@ export function SiteHeader() {
           <a href="/#features" className="hidden hover:text-foreground sm:inline">
             功能
           </a>
-          <a href="/#pricing" className="hidden hover:text-foreground sm:inline">
+          <a href="/pricing" className="hidden hover:text-foreground sm:inline">
             定价
           </a>
           <a

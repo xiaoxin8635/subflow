@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# 本地构建输出（调试用临时文件）
+build-output.log
 
 # vercel
 .vercel

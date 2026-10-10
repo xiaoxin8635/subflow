@@ -12,6 +12,9 @@ import { db } from "@/lib/db";
 import { SiteHeader } from "@/components/site-header";
 import { ProjectLiveView } from "./project-live-view";
 
+// 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
+export const instant = false;
+
 /** 项目详情页入口（服务端首屏） */
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();

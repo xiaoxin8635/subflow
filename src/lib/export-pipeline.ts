@@ -110,7 +110,7 @@ async function processExport(taskId: string): Promise<void> {
         ffmpegPath,
         [
           "-y",
-          "-i", path.join(process.cwd(), UPLOAD_DIR, project.videoKey!),
+          "-i", path.join(/* turbopackIgnore: true */ process.cwd(), UPLOAD_DIR, project.videoKey!),
           "-vf", `ass=${assFilterPath}`,
           "-c:v", "libx264",
           "-preset", "veryfast",
@@ -180,5 +180,5 @@ async function processExport(taskId: string): Promise<void> {
  * @param outputKey 导出产物 key（exports/{taskId}.mp4）
  */
 export function exportAbsPath(outputKey: string): string {
-  return path.join(process.cwd(), UPLOAD_DIR, outputKey);
+  return path.join(/* turbopackIgnore: true */ process.cwd(), UPLOAD_DIR, outputKey);
 }

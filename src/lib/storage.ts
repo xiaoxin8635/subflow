@@ -16,12 +16,13 @@ const LOCAL_UPLOAD_DIR = process.env.LOCAL_UPLOAD_DIR ?? "./uploads";
  * @param videoKey 上传时生成的存储 key（如 ab12cd.mp4）
  */
 export function localVideoPath(videoKey: string): string {
-  return path.join(process.cwd(), LOCAL_UPLOAD_DIR, videoKey);
+  // turbopackIgnore：运行时按环境变量读上传目录是有意行为，阻止打包器全项目追踪
+  return path.join(/* turbopackIgnore: true */ process.cwd(), LOCAL_UPLOAD_DIR, videoKey);
 }
 
 /** 确保上传目录存在（首次上传前调用） */
 export function ensureUploadDir(): void {
-  fs.mkdirSync(path.join(process.cwd(), LOCAL_UPLOAD_DIR), { recursive: true });
+  fs.mkdirSync(path.join(/* turbopackIgnore: true */ process.cwd(), LOCAL_UPLOAD_DIR), { recursive: true });
 }
 
 /**

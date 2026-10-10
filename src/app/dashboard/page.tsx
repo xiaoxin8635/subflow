@@ -10,6 +10,9 @@ import { db } from "@/lib/db";
 import { SiteHeader } from "@/components/site-header";
 import { ProjectStatusBadge, formatDuration } from "@/components/project-status";
 
+// 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
+export const instant = false;
+
 /** 秒数格式化为「X 小时 Y 分钟」 */
 function formatSeconds(total: number): string {
   const hours = Math.floor(total / 3600);
@@ -48,6 +51,10 @@ export default async function DashboardPage() {
               <span className="font-medium text-brand">
                 剩余额度 {formatSeconds(user.balanceSeconds)}
               </span>
+              <span className="mx-2 text-neutral-300">|</span>
+              <Link href="/pricing" className="text-neutral-500 transition-colors hover:text-brand">
+                购买额度
+              </Link>
               <span className="mx-2 text-neutral-300">|</span>
               <Link href="/dashboard/redeem" className="text-neutral-500 transition-colors hover:text-brand">
                 兑换额度

@@ -10,20 +10,11 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { db } from "@/lib/db";
 import { extractAudioToMp3, probeDurationSec } from "@/lib/media";
-import { publicUrlFor } from "@/lib/storage";
+import { localVideoPath, publicUrlFor } from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
 import { polishSegments } from "@/lib/polish";
 import { MAX_VIDEO_DURATION_SEC } from "@/lib/constants";
-
-/**
- * 由存储 key 解析磁盘上视频文件绝对路径
- * @param videoKey 上传时生成的存储 key
- */
-export function localVideoPath(videoKey: string): string {
-  const dir = process.env.LOCAL_UPLOAD_DIR ?? "./uploads";
-  return path.join(process.cwd(), dir, videoKey);
-}
 
 /**
  * 启动后台处理任务（不阻塞调用方；未捕获异常兜底打日志）

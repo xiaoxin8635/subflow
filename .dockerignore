@@ -1,0 +1,18 @@
+# 构建上下文瘦身：依赖与产物在容器内重新生成，本地产物绝不进镜像
+node_modules
+.next
+.git
+.gitignore
+uploads
+build-output.log
+*.md
+!README.md
+.env
+.env.*
+# 测试媒体与脚本产物
+scripts/*.mp3
+scripts/*.wav
+scripts/*.mp4
+scripts/samples/*.mp3
+scripts/samples/*.wav
+scripts/samples/*.mp4

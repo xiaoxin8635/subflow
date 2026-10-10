@@ -7,6 +7,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { SiteHeader } from "@/components/site-header";
 import { RedeemForm } from "./redeem-form";
 
+// 登录态页面：读取 cookie，按需阻塞渲染（Cache Components 下必须显式声明）
+export const instant = false;
+
 /** 兑换页入口组件 */
 export default async function RedeemPage() {
   const user = await getCurrentUser();

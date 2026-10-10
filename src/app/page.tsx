@@ -202,7 +202,7 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <a
-                  href="/dashboard"
+                  href={p.price === "¥0" ? "/dashboard" : "/pricing"}
                   className={`mt-8 block rounded-xl py-3 text-center font-medium transition-colors ${
                     p.highlighted
                       ? "bg-brand text-white hover:bg-brand-strong"

@@ -1,0 +1,57 @@
+# =====================================================================
+# SubFlow 生产编排：PostgreSQL + 结构同步 + 应用
+# 用法：复制 .env.example 为 .env 填好生产值 → docker compose up -d --build
+# =====================================================================
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 配置 POSTGRES_PASSWORD}
+      POSTGRES_DB: subflow
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d subflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # 一次性服务：同步数据库结构（幂等），app 等待其成功后启动
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/subflow?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/subflow?schema=public
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?请在 .env 配置 DASHSCOPE_API_KEY}
+      SMS_DEV_MODE: ${SMS_DEV_MODE:-false}
+      DEV_FIXED_CODE: ${DEV_FIXED_CODE:-}
+      ALIYUN_SMS_SIGN_NAME: ${ALIYUN_SMS_SIGN_NAME:-}
+      ALIYUN_SMS_TEMPLATE_CODE: ${ALIYUN_SMS_TEMPLATE_CODE:-}
+      ASR_PROVIDER: ${ASR_PROVIDER:-qwen-filetrans}
+      PUBLIC_ASSET_BASE_URL: ${PUBLIC_ASSET_BASE_URL:-}
+      SIGNUP_BONUS_SECONDS: ${SIGNUP_BONUS_SECONDS:-1800}
+      ADMIN_PHONES: ${ADMIN_PHONES:-}
+    volumes:
+      # 上传视频与导出成片持久化（宿主机目录便于备份/迁移 OSS）
+      - ./uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:

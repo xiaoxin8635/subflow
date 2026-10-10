@@ -20,7 +20,8 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **模块 ②**：上传 + 转写流水线（流式上传、FFmpeg 抽音频、ASR、LLM 润色、状态机）
 - [x] **模块 ③**：字幕编辑器（视频预览 + 逐行编辑 + 样式切换）
 - [x] **模块 ④**：FFmpeg 烧录导出 + 额度扣减 + 激活码兑换
-- [ ] **模块 ⑤**：支付接入 + 联调 + 部署上线
+- [x] **模块 ⑤**：管理后台 + 购买页 + 生产构建/部署产物（`DEPLOY.md`）
+- [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码 + 法务页（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
 
@@ -31,9 +32,25 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - 计费：按视频时长向上取整为秒；创建时余额预检（402），成功后在事务内
   「任务置 DONE + 条件扣减余额（防负数）+ 写 CreditLedger(reason=CONSUME_EXPORT)」，
   失败不扣费；删除项目时同步清理导出产物文件
-- 激活码（MVP 收款载体）：`node scripts/gen-redeem-codes.mjs --seconds 600 --count 5`
+### 激活码（MVP 收款载体）：`node scripts/gen-redeem-codes.mjs --seconds 600 --count 5`
   （或 `--plan 基础版`）生成 `SUBF-XXXX-XXXX-XXXX` 格式码；用户在 `/dashboard/redeem`
   兑换，时长码直接入账、套餐码开月订阅，事务内防并发重兑
+
+### 管理后台与购买页（模块 ⑤）
+
+- **`/admin`**：`ADMIN_PHONES` 白名单用户可见（其余一律 404）。经营统计
+  （用户/额度/项目/导出/消耗）+ 页面化生成激活码（时长码/套餐码 × 数量）+ 未用码与用户总览
+- **`/pricing`**：购买页，套餐数据与后台发码同源（Plan 表）；三步购买引导
+  （扫码付款 → 客服发码 → 兑换到账）。收款码图片放 `public/pay-qr/wechat.png`
+  与 `alipay.png` 后自动展示，未配置时显示占位
+- 生产构建：登录态页面已声明 `instant = false`（Cache Components 下按需阻塞渲染）；
+  `npm run build` 零警告通过，上传/导出两条链路已在生产模式 E2E 验证
+
+## 部署
+
+见 [DEPLOY.md](DEPLOY.md)：服务器选购、ICP 备案、`docker compose up -d --build`
+（多阶段构建：migrate 一次性容器同步表结构 + standalone 精简运行镜像，自带 ffmpeg）、
+Caddy HTTPS、上线前检查清单与日常运维命令。
 
 ### 字幕编辑器说明（模块 ③）
 
