@@ -23,6 +23,8 @@ export interface ProjectDetail {
   status: ProjectStatus;
   durationSec: number | null;
   error: string | null;
+  /** UPLOADED（排队中）时的转写队列位置（1 起；null = 队列信息不可用/已在处理） */
+  queuePosition?: number | null;
   transcript: {
     segments: unknown;
     asrProvider: string | null;
@@ -138,9 +140,19 @@ export function ProjectLiveView({
         <div className="mt-10 flex min-h-[300px] flex-col items-center justify-center rounded-2xl border border-black/5 bg-white text-center shadow-sm">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand/20 border-t-brand" />
           <p className="mt-5 font-medium">
-            {project.status === "TRANSCRIBING" ? "AI 正在识别语音…" : project.status === "POLISHING" ? "AI 正在润色字幕…" : "任务排队中…"}
+            {project.status === "TRANSCRIBING"
+              ? "AI 正在识别语音…"
+              : project.status === "POLISHING"
+                ? "AI 正在润色字幕…"
+                : project.queuePosition
+                  ? `排队中（第 ${project.queuePosition} 位）…`
+                  : "任务排队中…"}
           </p>
-          <p className="mt-1 text-sm text-neutral-500">页面每 3 秒自动刷新，无需手动操作</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {project.status === "UPLOADED" && project.queuePosition
+              ? "前面的任务完成后自动开始，页面自动刷新，无需手动操作"
+              : "页面每 3 秒自动刷新，无需手动操作"}
+          </p>
           {perm === "default" && (
             <button
               type="button"

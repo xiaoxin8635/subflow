@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { removeVideo, removeExportArtifact } from "@/lib/storage";
+import { transcribeQueuePosition } from "@/lib/queue/queues";
 
 /**
  * 查询项目详情（含转写结果）
@@ -32,6 +33,12 @@ export async function GET(
     return NextResponse.json({ error: "项目不存在" }, { status: 404 });
   }
 
+  // UPLOADED = 已入队待消费：附带排队位置供详情页展示「第 N 位」
+  const queue =
+    project.status === "UPLOADED"
+      ? await transcribeQueuePosition(`transcribe-${project.id}`)
+      : null;
+
   return NextResponse.json({
     project: {
       id: project.id,
@@ -42,6 +49,7 @@ export async function GET(
       videoName: project.videoName,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
+      queuePosition: queue?.position ?? null,
       transcript: project.transcript
         ? {
             segments: project.transcript.segments,

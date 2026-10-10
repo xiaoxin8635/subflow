@@ -151,3 +151,33 @@ export async function queueFailedCount(queueName: string): Promise<number | null
     return null;
   }
 }
+
+/**
+ * 查询转写任务的排队位置（批量上传的队列可视化；Redis 不可用返回 null）
+ * @description bullmq 6.x 中带 priority 的任务在 prioritized zset（job.getState()
+ *              返回 "prioritized"，getWaiting() 不含它们），消费顺序 = zset score
+ *              升序（付费优先 + 同级 FIFO）；wait list 的任务排在其后。
+ *              因此直接读 Redis 原始结构计算位置（Queue.getJobs 的返回顺序
+ *              并非消费顺序，实测不适用于位置计算）。
+ * @param jobId 任务 ID（`transcribe-${projectId}`）
+ * @returns position=等待队列第 N 位（1 起）；active=true 表示正在处理；
+ *          两者皆空表示任务不在队列（已完成/失败/降级直跑）
+ */
+export async function transcribeQueuePosition(
+  jobId: string,
+): Promise<{ position: number | null; active: boolean } | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const prioritized = await redis.zrange(`bull:${TRANSCRIPT_QUEUE_NAME}:prioritized`, 0, "-1");
+    const idx = prioritized.indexOf(jobId);
+    if (idx >= 0) return { position: idx + 1, active: false };
+    const waiting = await redis.lrange(`bull:${TRANSCRIPT_QUEUE_NAME}:wait`, 0, "-1");
+    const wIdx = waiting.indexOf(jobId);
+    if (wIdx >= 0) return { position: prioritized.length + wIdx + 1, active: false };
+    const activeIds = await redis.smembers(`bull:${TRANSCRIPT_QUEUE_NAME}:active`);
+    return { position: null, active: activeIds.includes(jobId) };
+  } catch {
+    return null;
+  }
+}

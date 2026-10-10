@@ -1,14 +1,15 @@
 "use client";
 /**
- * @file 新建项目页（视频分片上传）
- * @description 客户端组件：选择文件 → 前端预校验（类型/大小）→ 分片上传：
+ * @file 新建项目页（多文件批量上传，P1.5 批量处理）
+ * @description 客户端组件：支持一次选择/拖入多个视频，串行逐个分片上传：
  *   ① POST /api/uploads/init 创建会话（或凭 sessionStorage 中的 uploadId 断点续传）
  *   ② 3 片并发上传分片（每片失败自动重试 2 次）：
  *      local 模式 → PUT /api/uploads/[id]/chunks/[index]（经服务器）；
  *      oss   模式 → 直接 PUT init/status 返回的 partUrls[index]（浏览器直传 OSS）。
- *   ③ POST /api/uploads/[id]/complete 合并入库 → 跳转项目页开始转写
- * 上传中刷新页面后重新选择同一文件，会自动查询已传分片并跳过（断点续传；
- * oss 模式的直传签名 URL 过期后由 status 接口重发）。
+ *   ③ POST /api/uploads/[id]/complete 合并入库 → 转写自动入队。
+ *   单文件完成直接跳转项目页；多文件全部完成后跳回项目列表（每个项目独立排队，
+ *   串行上传避免多文件分片并发打满浏览器连接；单个文件失败不阻断后续文件，
+ *   结束后可一键重传失败项）。上传中刷新后重选同一文件可断点续传。
  */
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -30,6 +31,9 @@ const CONCURRENCY = 3;
 /** 单片失败最大重试次数 */
 const CHUNK_RETRIES = 2;
 
+/** 单批最多文件数（防误选整目录拖垮带宽） */
+const MAX_BATCH_FILES = 20;
+
 /** init 接口响应 */
 interface InitBody {
   uploadId: string;
@@ -50,7 +54,7 @@ interface ResumeBody {
   partUrls?: string[];
 }
 
-/** 分片上传的会话状态（运行期保存在 ref 中） */
+/** 分片上传的会话状态（运行期） */
 interface UploadRun {
   uploadId: string;
   chunkSize: number;
@@ -59,6 +63,18 @@ interface UploadRun {
   received: Set<number>;
   /** oss 模式：各分片直传 PUT 签名 URL */
   partUrls?: string[];
+}
+
+/** 单个文件的批内状态机 */
+type RowStatus = "pending" | "uploading" | "done" | "failed" | "canceled";
+
+/** 文件列表行 */
+interface FileRow {
+  id: number;
+  file: File;
+  status: RowStatus;
+  progress: number;
+  error?: string;
 }
 
 /** 字节数格式化为可读大小 */
@@ -72,40 +88,66 @@ function sessionKey(file: File): string {
   return `subflow-upload:${file.name}:${file.size}`;
 }
 
+/** 文件格式是否在白名单 */
+function extOf(file: File): string {
+  return file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+}
+
 /** 新建项目页组件 */
 export default function NewProjectPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState(0);
+  const rowIdRef = useRef(0);
+  const [rows, setRows] = useState<FileRow[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [resumed, setResumed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
 
-  /** 扩展名是否在白名单 */
-  const extOk = file ? ACCEPT_TYPES[file.name.slice(file.name.lastIndexOf(".")).toLowerCase()] : true;
+  const hasInvalid = rows.some((r) => r.status === "pending" && !ACCEPT_TYPES[extOf(r.file)]);
+  const oversize = (r: FileRow) => r.file.size > MAX_UPLOAD_BYTES;
+  const doneCount = rows.filter((r) => r.status === "done").length;
+  const pendingRows = () => rows.filter((r) => r.status === "pending" || r.status === "canceled" || r.status === "failed");
 
-  /** 选中文件后的前端预校验 */
-  function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    setError(null);
-    setResumed(false);
-    const f = e.target.files?.[0] ?? null;
-    setFile(f);
-    if (f && f.size > MAX_UPLOAD_BYTES) {
-      setError(`文件超过大小上限（${formatBytes(MAX_UPLOAD_BYTES)}）`);
-    }
+  /** 追加文件（点击选择/拖拽共用）：去重、限流到 MAX_BATCH_FILES */
+  function addFiles(list: FileList | File[]) {
+    setSummary(null);
+    setRows((prev) => {
+      const existing = new Set(prev.map((r) => `${r.file.name}:${r.file.size}`));
+      const incoming = Array.from(list)
+        .filter((f) => !existing.has(`${f.name}:${f.size}`))
+        .slice(0, MAX_BATCH_FILES - prev.length);
+      return [
+        ...prev,
+        ...incoming.map((file) => ({
+          id: ++rowIdRef.current,
+          file,
+          status: "pending" as RowStatus,
+          progress: 0,
+        })),
+      ];
+    });
+  }
+
+  /** 更新某行状态（不可变替换） */
+  function patchRow(id: number, patch: Partial<FileRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  /** 移除一行（仅未上传/失败/取消状态可移除） */
+  function removeRow(id: number) {
+    setRows((prev) => prev.filter((r) => !(r.id === id && r.status !== "uploading" && r.status !== "done")));
   }
 
   /**
    * 上传单个分片（带重试）：oss 模式直传签名 URL，local 模式走服务器分片接口
+   * @param file  当前文件
    * @param run   会话状态
    * @param index 分片索引（0 起）
    * @param signal 取消信号
    */
-  async function uploadChunk(run: UploadRun, index: number, signal: AbortSignal): Promise<void> {
+  async function uploadChunk(file: File, run: UploadRun, index: number, signal: AbortSignal): Promise<void> {
     const start = index * run.chunkSize;
-    const blob = file!.slice(start, Math.min(start + run.chunkSize, file!.size));
+    const blob = file.slice(start, Math.min(start + run.chunkSize, file.size));
     // oss 直传目标 URL；local 模式为 undefined 走服务器接口
     const ossUrl = run.partUrls?.[index];
     for (let attempt = 0; attempt <= CHUNK_RETRIES; attempt++) {
@@ -121,7 +163,6 @@ export default function NewProjectPage() {
             });
         if (res.ok) {
           run.received.add(index);
-          setProgress(Math.round((run.received.size / run.chunkCount) * 100));
           return;
         }
         // 4xx 且非限流：重试无意义，直接抛出
@@ -136,112 +177,141 @@ export default function NewProjectPage() {
     }
   }
 
-  /** 发起分片上传，成功后跳详情页 */
-  async function handleUpload() {
-    if (!file || uploading) return;
-    const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-    const mime = ACCEPT_TYPES[ext];
-    if (!mime) {
-      setError("仅支持 mp4 / mov / mkv / webm 格式");
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(`文件超过大小上限（${formatBytes(MAX_UPLOAD_BYTES)}）`);
-      return;
+  /**
+   * 上传单个文件到完成入库（断点续传 + 分片并发），返回项目 ID
+   * @param row      当前行
+   * @param signal   取消信号
+   */
+  async function uploadOne(row: FileRow, signal: AbortSignal): Promise<string> {
+    const file = row.file;
+    const mime = ACCEPT_TYPES[extOf(file)];
+
+    // ① 尝试断点续传：sessionStorage 里有同文件未完成会话则查询已传分片
+    let run: UploadRun | null = null;
+    let resumed = false;
+    const savedId = sessionStorage.getItem(sessionKey(file));
+    if (savedId) {
+      const res = await fetch(`/api/uploads/${savedId}`, { signal });
+      if (res.ok) {
+        const body = (await res.json()) as ResumeBody;
+        run = {
+          uploadId: savedId,
+          chunkSize: body.chunkSize,
+          chunkCount: body.chunkCount,
+          received: new Set(body.uploadedIndexes),
+          partUrls: body.partUrls,
+        };
+        resumed = body.uploadedIndexes.length > 0;
+      } else {
+        sessionStorage.removeItem(sessionKey(file)); // 会话已过期，清掉
+      }
     }
 
+    // ② 无可续传会话：创建新会话
+    if (!run) {
+      const res = await fetch("/api/uploads/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: mime, size: file.size }),
+        signal,
+      });
+      const body = (await res.json().catch(() => ({}))) as InitBody & { error?: string };
+      if (!res.ok || !body.uploadId) {
+        throw new Error(body.error ?? `创建上传会话失败（HTTP ${res.status}）`);
+      }
+      run = {
+        uploadId: body.uploadId,
+        chunkSize: body.chunkSize,
+        chunkCount: body.chunkCount,
+        received: new Set<number>(),
+        partUrls: body.partUrls,
+      };
+    }
+    sessionStorage.setItem(sessionKey(file), run.uploadId);
+    if (resumed) patchRow(row.id, { progress: Math.round((run.received.size / run.chunkCount) * 100) });
+
+    // ③ 并发上传未到齐的分片（简单工作队列），完成后推进度
+    const pending = Array.from({ length: run.chunkCount }, (_, i) => i).filter(
+      (i) => !run!.received.has(i),
+    );
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < pending.length) {
+        const idx = pending[cursor++];
+        await uploadChunk(file, run!, idx, signal);
+        patchRow(row.id, { progress: Math.round((run!.received.size / run!.chunkCount) * 100) });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, worker));
+
+    // ④ 全部到齐：通知服务端合并入库
+    const completeRes = await fetch(`/api/uploads/${run.uploadId}/complete`, {
+      method: "POST",
+      signal,
+    });
+    const completeBody = (await completeRes.json().catch(() => ({}))) as {
+      projectId?: string;
+      error?: string;
+    };
+    if (!completeRes.ok || !completeBody.projectId) {
+      throw new Error(completeBody.error ?? `合并失败（HTTP ${completeRes.status}）`);
+    }
+    sessionStorage.removeItem(sessionKey(file));
+    return completeBody.projectId;
+  }
+
+  /** 批量上传：串行逐个文件，单个失败不阻断；单文件成功即跳详情页，多文件完成跳列表 */
+  async function handleUpload() {
+    const queue = pendingRows().filter((r) => ACCEPT_TYPES[extOf(r.file)] && !oversize(r));
+    if (uploading || queue.length === 0) return;
     setUploading(true);
-    setProgress(0);
-    setResumed(false);
-    setError(null);
+    setSummary(null);
 
     const abort = new AbortController();
     abortRef.current = abort;
+    let lastProjectId: string | null = null;
+    let failCount = 0;
+    let canceled = false;
 
     try {
-      // ① 尝试断点续传：sessionStorage 里有同文件未完成会话则查询已传分片
-      let run: UploadRun | null = null;
-      const savedId = sessionStorage.getItem(sessionKey(file));
-      if (savedId) {
-        const res = await fetch(`/api/uploads/${savedId}`, { signal: abort.signal });
-        if (res.ok) {
-          const body = (await res.json()) as ResumeBody;
-          run = {
-            uploadId: savedId,
-            chunkSize: body.chunkSize,
-            chunkCount: body.chunkCount,
-            received: new Set(body.uploadedIndexes),
-            partUrls: body.partUrls,
-          };
-          setResumed(body.uploadedIndexes.length > 0);
-          setProgress(Math.round((body.uploadedIndexes.length / body.chunkCount) * 100));
-        } else {
-          sessionStorage.removeItem(sessionKey(file)); // 会话已过期，清掉
+      for (const row of queue) {
+        patchRow(row.id, { status: "uploading", progress: 0, error: undefined });
+        try {
+          const projectId = await uploadOne(row, abort.signal);
+          patchRow(row.id, { status: "done", progress: 100 });
+          lastProjectId = projectId;
+        } catch (e) {
+          if (e instanceof Error && (e.name === "AbortError" || e.message === "ABORTED")) {
+            patchRow(row.id, { status: "canceled", error: "已取消（可续传）" });
+            canceled = true;
+            break;
+          }
+          failCount++;
+          patchRow(row.id, { status: "failed", error: e instanceof Error ? e.message : "上传失败" });
         }
-      }
-
-      // ② 无可续传会话：创建新会话
-      if (!run) {
-        const res = await fetch("/api/uploads/init", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName: file.name, contentType: mime, size: file.size }),
-          signal: abort.signal,
-        });
-        const body = (await res.json().catch(() => ({}))) as InitBody & { error?: string };
-        if (!res.ok || !body.uploadId) {
-          throw new Error(body.error ?? `创建上传会话失败（HTTP ${res.status}）`);
-        }
-        run = {
-          uploadId: body.uploadId,
-          chunkSize: body.chunkSize,
-          chunkCount: body.chunkCount,
-          received: new Set<number>(),
-          partUrls: body.partUrls,
-        };
-      }
-      sessionStorage.setItem(sessionKey(file), run.uploadId);
-
-      // ③ 并发上传未到齐的分片（简单工作队列）
-      const pending = Array.from({ length: run.chunkCount }, (_, i) => i).filter(
-        (i) => !run!.received.has(i),
-      );
-      let cursor = 0;
-      const worker = async () => {
-        while (cursor < pending.length) {
-          const idx = pending[cursor++];
-          await uploadChunk(run!, idx, abort.signal);
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, worker));
-
-      // ④ 全部到齐：通知服务端合并入库
-      const completeRes = await fetch(`/api/uploads/${run.uploadId}/complete`, {
-        method: "POST",
-        signal: abort.signal,
-      });
-      const completeBody = (await completeRes.json().catch(() => ({}))) as {
-        projectId?: string;
-        error?: string;
-      };
-      if (!completeRes.ok || !completeBody.projectId) {
-        throw new Error(completeBody.error ?? `合并失败（HTTP ${completeRes.status}）`);
-      }
-      sessionStorage.removeItem(sessionKey(file));
-      router.push(`/project/${completeBody.projectId}`);
-    } catch (e) {
-      if (e instanceof Error && (e.name === "AbortError" || e.message === "ABORTED")) {
-        setError("上传已取消。重新选择同一文件可从断点继续。");
-      } else {
-        setError(e instanceof Error ? e.message : "上传失败，请重试");
       }
     } finally {
       setUploading(false);
       abortRef.current = null;
     }
+
+    // 结果汇总与跳转：有取消留在本页；否则全部成功时单文件跳详情、多文件跳列表
+    if (canceled) {
+      setSummary("上传已取消，未完成文件可从断点继续");
+      return;
+    }
+    if (failCount === 0 && !pendingRows().length) {
+      if (lastProjectId && queue.length === 1) {
+        router.push(`/project/${lastProjectId}`);
+      } else {
+        router.push("/dashboard");
+      }
+      return;
+    }
+    setSummary(`完成 ${queue.length - failCount} 个，失败 ${failCount} 个（可重传失败项）`);
   }
 
-  /** 取消当前上传（分片已落盘，可断点续传） */
+  /** 取消剩余上传（当前文件已传分片保留，可断点续传） */
   function handleCancel() {
     abortRef.current?.abort();
   }
@@ -259,74 +329,93 @@ export default function NewProjectPage() {
 
         <h1 className="mt-4 text-2xl font-bold tracking-tight">新建项目</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          上传视频后 AI 将自动转写并生成字幕（支持 mp4 / mov / mkv / webm，最大 500MB；分片上传，中断可续传）
+          支持一次选择多个视频批量上传（mp4 / mov / mkv / webm，单个最大 500MB；分片上传，中断可续传）
         </p>
 
         {/* 拖放/点击选择区域 */}
         <label
-          className="mt-8 flex min-h-[240px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-white transition-colors hover:border-brand/50 hover:bg-brand-soft/40"
+          className="mt-8 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-white px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-brand-soft/40"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            const f = e.dataTransfer.files?.[0];
-            if (f && inputRef.current) {
-              const dt = new DataTransfer();
-              dt.items.add(f);
-              inputRef.current.files = dt.files;
-              handleSelect({ target: inputRef.current } as React.ChangeEvent<HTMLInputElement>);
-            }
+            if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
           }}
         >
-          <input ref={inputRef} type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" className="hidden" onChange={handleSelect} disabled={uploading} />
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept="video/mp4,video/quicktime,video/x-matroska,video/webm"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) addFiles(e.target.files);
+              e.target.value = ""; // 允许重复选择同一文件
+            }}
+            disabled={uploading}
+          />
           <div className="text-4xl">📹</div>
-          {file ? (
-            <div className="mt-4 px-6 text-center">
-              <p className="max-w-md truncate font-medium">{file.name}</p>
-              <p className={`mt-1 text-sm ${extOk ? "text-neutral-500" : "text-red-500"}`}>
-                {formatBytes(file.size)}
-                {!extOk && " · 不支持的格式"}
-              </p>
-            </div>
-          ) : (
-            <div className="mt-4 px-6 text-center">
-              <p className="font-medium">点击选择 或 拖拽视频到这里</p>
-              <p className="mt-1 text-sm text-neutral-500">mp4 / mov / mkv / webm · ≤ 500MB</p>
-            </div>
-          )}
+          <p className="mt-3 font-medium">点击选择 或 拖拽视频到这里（可多选）</p>
+          <p className="mt-1 text-sm text-neutral-500">mp4 / mov / mkv / webm · 单个 ≤ 500MB · 每批 ≤ {MAX_BATCH_FILES} 个</p>
         </label>
 
-        {/* 上传进度条 */}
-        {uploading && (
-          <div className="mt-6">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200">
-              <div
-                className="h-full rounded-full bg-brand transition-[width] duration-200"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="mt-2 text-center text-sm text-neutral-500">
-              上传中 {progress}%（分片并发上传，转写将在上传完成后自动开始）
-            </p>
-          </div>
+        {/* 文件列表 */}
+        {rows.length > 0 && (
+          <ul className="mt-6 space-y-2">
+            {rows.map((r) => {
+              const bad = !ACCEPT_TYPES[extOf(r.file)];
+              const tooBig = oversize(r);
+              return (
+                <li key={r.id} className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{r.file.name}</p>
+                      <p className={`mt-0.5 text-xs ${bad || tooBig ? "text-red-500" : "text-neutral-400"}`}>
+                        {formatBytes(r.file.size)}
+                        {bad && " · 不支持的格式"}
+                        {tooBig && " · 超过大小上限"}
+                        {r.error && ` · ${r.error}`}
+                        {r.status === "done" && " · 上传完成，转写已排队"}
+                      </p>
+                    </div>
+                    {r.status === "uploading" ? (
+                      <span className="shrink-0 text-xs text-neutral-500">{r.progress}%</span>
+                    ) : (
+                      (r.status === "pending" || r.status === "failed" || r.status === "canceled") && (
+                        <button
+                          type="button"
+                          onClick={() => removeRow(r.id)}
+                          className="shrink-0 text-xs text-neutral-400 transition-colors hover:text-red-500"
+                        >
+                          移除
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {r.status === "uploading" && (
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                      <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${r.progress}%` }} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
 
-        {/* 断点续传提示 */}
-        {resumed && !uploading && (
-          <p className="mt-4 text-center text-sm text-emerald-600">
-            检测到上次未完成的上传，将自动从断点继续
-          </p>
-        )}
-
-        {/* 错误提示 */}
-        {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
+        {/* 批量结果汇总 */}
+        {summary && <p className="mt-4 text-center text-sm text-amber-600">{summary}</p>}
 
         {/* 提交按钮 */}
         <button
           onClick={handleUpload}
-          disabled={!file || !extOk || uploading || (!!error && !!file && file.size > MAX_UPLOAD_BYTES)}
+          disabled={uploading || rows.length === 0 || hasInvalid || rows.every((r) => r.status === "done")}
           className="mt-8 w-full rounded-xl bg-brand py-3 font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {uploading ? "上传中…" : "开始上传并转写"}
+          {uploading
+            ? `上传中（${doneCount}/${rows.length}）…`
+            : rows.length > 1
+              ? `批量上传 ${rows.length} 个视频`
+              : "开始上传并转写"}
         </button>
 
         {/* 取消按钮（上传中显示） */}

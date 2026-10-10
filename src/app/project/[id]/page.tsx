@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { transcribeQueuePosition } from "@/lib/queue/queues";
 import { SiteHeader } from "@/components/site-header";
 import { NotificationBell } from "@/components/notification-bell";
 import { ProjectLiveView } from "./project-live-view";
@@ -49,6 +50,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             status: project.status,
             durationSec: project.durationSec,
             error: project.error,
+            queuePosition:
+              project.status === "UPLOADED"
+                ? ((await transcribeQueuePosition(`transcribe-${project.id}`))?.position ?? null)
+                : null,
             transcript: project.transcript
               ? {
                   segments: project.transcript.segments,
