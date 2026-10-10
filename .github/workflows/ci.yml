@@ -1,0 +1,97 @@
+# =====================================================================
+# SubFlow CI（P1 2.7）：push / PR 自动跑 静态检查 + 构建 + 冒烟 E2E
+# =====================================================================
+# 分层策略（费用与时长控制）：
+#   - check：tsc + eslint + 生产构建，零外部依赖，每次 push/PR 必跑
+#   - smoke ：真实起 server（Postgres/Redis service + 进程内 Worker），
+#     跑 scripts/ci-smoke.mjs——13 项断言覆盖登录/上传魔数防御/页面健康，
+#     不调用 DashScope（零 API 费用）；转写/导出全链路 E2E 因烧真实
+#     ASR/LLM 费用，仍留在本地人工触发（见 README「E2E 测试」）
+#   - CD：暂无服务器可部署，购机备案后在此文件追加 deploy job
+#     （SSH → git pull → docker compose up -d --build，见 DEPLOY.md）
+# =====================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: 静态检查与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npx eslint src
+      - run: npm run build
+        env:
+          # 构建期不读真实密钥，占位防模块顶层校验
+          DASHSCOPE_API_KEY: ci-placeholder
+
+  smoke:
+    name: 冒烟 E2E（零外部 API 调用）
+    needs: check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: subflow123
+          POSTGRES_DB: subflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:subflow123@localhost:5432/subflow?schema=public
+      REDIS_URL: redis://localhost:6379
+      DASHSCOPE_API_KEY: ci-placeholder
+      SMS_DEV_MODE: "true"
+      DEV_FIXED_CODE: "123456"
+      STORAGE_DRIVER: local
+      ENABLE_INPROCESS_WORKER: "1"
+      ASR_PROVIDER: qwen-sync
+      SMOKE_PHONE: "13900001111"
+      SMOKE_DEV_CODE: "123456"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma db push
+      - run: npx tsx prisma/seed.mjs
+      - run: npm run build
+      - name: 启动服务并跑冒烟
+        run: |
+          npm start &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/login > /dev/null; then
+              echo "server ready"
+              break
+            fi
+            sleep 2
+          done
+          node scripts/ci-smoke.mjs

@@ -138,6 +138,15 @@ docker compose up -d --build      # 更新代码后重新构建部署
 docker compose exec db pg_dump -U postgres subflow > backup.sql   # 手动备份
 ```
 
+## CI/CD（P1 2.7）
+
+- **CI 已就绪**：push/PR 到 main 触发 GitHub Actions（`.github/workflows/ci.yml`）——
+  tsc + eslint + 生产构建 + 冒烟 E2E（真实起服务，不调外部付费 API，零费用）
+- **CD（待服务器到位后配置）**：在 ci.yml 追加 deploy job——
+  `appleboy/ssh-action` 登录服务器执行 `cd /opt/subflow && git pull && docker compose up -d --build`；
+  密钥放 GitHub Secrets（`SSH_HOST` / `SSH_USERNAME` / `SSH_PRIVATE_KEY`），
+  并给 deploy job 挂 environment 保护（仅 main、手动批准后再执行）
+
 ## 已知限制（后续迭代方向）
 
 - **local 驱动带宽瓶颈**：`STORAGE_DRIVER=local` 时视频经服务器中转（上传→转写→下载成片），

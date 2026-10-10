@@ -37,6 +37,9 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       已读/全部已读）覆盖转写/导出的完成与失败四类事件，页面不可见时浏览器系统通知
 - [x] **P1 批量处理**（`docs/ROADMAP.md` 2.5）：新建项目页一次多选/拖入多个视频
       串行批量上传（逐行进度、失败不阻断、可重传），详情页展示转写队列实时排位
+- [x] **P1 CI**（`docs/ROADMAP.md` 2.7）：GitHub Actions——push/PR 自动跑
+      tsc + eslint + 生产构建 + 冒烟 E2E（真实起服务，零外部 API 调用）；
+      CD 部署待服务器到位后追加（见 `DEPLOY.md`）
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -124,6 +127,18 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - **队列排位**：项目状态为 UPLOADED（排队中）时，详情接口附带 `queuePosition`
   （实时计算，含付费优先级——排队位置按 BullMQ prioritized zset 的真实消费顺序）；
   详情页显示「排队中（第 N 位）…」，3 秒轮询自动推进
+
+### CI 说明（P1.7）
+
+- `.github/workflows/ci.yml`：push/PR 到 main 自动触发，两个 job：
+  - **check**：`npm ci` → prisma generate → tsc → eslint → 生产构建（零外部依赖）
+  - **smoke**：Postgres/Redis service 容器 → db push + seed → 构建 → 起生产 server
+    （进程内 Worker）→ 跑 [scripts/ci-smoke.mjs](scripts/ci-smoke.mjs)（13 项断言：
+    未登录 401 / 登录会话 / 魔数 415 / 页面与轻接口健康）。
+    冒烟全程**不调用 DashScope**，CI 零 API 费用
+- 全链路 E2E（转写/导出/队列/OSS/通知/批量）烧真实 ASR/LLM 费用，保留在本地人工触发
+- **CD**：暂无服务器。购机备案后在 ci.yml 追加 deploy job
+  （SSH → `git pull` → `docker compose up -d --build`，步骤见 `DEPLOY.md`）
 
 ## 部署
 
