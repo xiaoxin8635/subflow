@@ -9,6 +9,7 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 | 框架 | Next.js 16（App Router + Turbopack + Cache Components） |
 | 语言 | TypeScript（strict） |
 | 数据库 | PostgreSQL 16（Docker）+ Prisma 6 |
+| 任务队列 | Redis 7 + BullMQ（转写/导出独立 Worker 消费，宕机自动恢复，付费用户优先） |
 | ASR | 阿里云百炼 qwen3-asr-flash（同步）/ qwen3-asr-flash-filetrans（异步，生产） |
 | LLM 润色 | qwen-flash（DashScope OpenAI 兼容模式） |
 | 媒体处理 | FFmpeg（ffmpeg-static / ffprobe-static 自带二进制） |
@@ -23,6 +24,8 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **模块 ⑤**：管理后台 + 购买页 + 生产构建/部署产物（`DEPLOY.md`）
 - [x] **P0 加固**（`docs/ROADMAP.md` 第一期）：SRT 导出、法务页、API 限流防刷、
       分片上传 + 断点续传、项目列表分页、落地页宣传修正
+- [x] **P1 任务队列**（`docs/ROADMAP.md` 2.1）：转写/导出进 Redis 队列 + 独立 Worker
+      （并发上限/失败重试/宕机自动恢复/付费优先），限流器迁移 Redis 分布式滑窗
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -47,6 +50,16 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   与 `alipay.png` 后自动展示，未配置时显示占位
 - 生产构建：登录态页面已声明 `instant = false`（Cache Components 下按需阻塞渲染）；
   `npm run build` 零警告通过，上传/导出两条链路已在生产模式 E2E 验证
+
+### 任务队列说明（P1）
+
+- 转写/导出任务经 BullMQ 进 Redis 队列（[src/lib/queue/](src/lib/queue/)），独立 Worker 消费
+  （`npm run worker`；dev 模式 `ENABLE_INPROCESS_WORKER=1` 时随 `npm run dev` 进程内启动）
+- 并发上限：`TRANSCRIBE_CONCURRENCY`（默认 3）/ `EXPORT_CONCURRENCY`（默认 1，FFmpeg 吃 CPU）；
+  失败指数退避自动重试，重试用尽标记 FAILED（原因落库）；Worker 宕机后在跑任务经
+  stalled 检测自动重新入队（Redis AOF 持久化，容器重启不丢任务）
+- 优先级：有有效订阅的用户任务优先消费（付费优先）
+- 降级策略：Redis 不可用时任务自动降级进程内直跑、限流器降级内存版（可用性优先，日志提示）
 
 ## 部署
 
@@ -75,15 +88,18 @@ Caddy HTTPS、上线前检查清单与日常运维命令。
 # 1. 启动 PostgreSQL（首次）
 docker run -d --name subflow-db -e POSTGRES_PASSWORD=subflow123 -e POSTGRES_DB=subflow -p 5432:5432 postgres:16
 
-# 2. 安装依赖 + 初始化数据库
+# 2. 启动 Redis（任务队列 + 限流，首次）
+docker run -d --name subflow-redis -p 6379:6379 redis:7-alpine redis-server --appendonly yes
+
+# 3. 安装依赖 + 初始化数据库
 npm install
 npx prisma db push
 npx tsx prisma/seed.mjs   # 写入套餐与字幕样式种子数据
 
-# 3. 配置 .env（参考 .env 内注释，必填 DASHSCOPE_API_KEY）
+# 4. 配置 .env（参考 .env 内注释，必填 DASHSCOPE_API_KEY）
 
-# 4. 启动
-npm run dev
+# 5. 启动
+npm run dev   # .env 的 ENABLE_INPROCESS_WORKER=1 时，进程内直接启动队列 Worker，无需另开终端
 ```
 
 登录页输入任意 11 位手机号，开发模式（`SMS_DEV_MODE=true`）固定验证码 `123456`，
@@ -112,6 +128,10 @@ node scripts/e2e-export-test.mjs
 
 # P0 专项：分片上传（中断→resume→续传→合并）→ SRT 断言 → 魔数拒绝 → 分页 → 限流
 node scripts/e2e-p0-test.mjs
+
+# P1 队列专项：无 Worker 任务滞留 → 启动消费 → 导出队列 + 扣费 → kill 宕机恢复
+# （脚本自管 Worker 子进程，运行前确保没有其他 Worker 在跑）
+node scripts/e2e-queue-test.mjs
 
 # 生成激活码（落库并打印）
 node scripts/gen-redeem-codes.mjs --seconds 600 --count 5

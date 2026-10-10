@@ -1,6 +1,8 @@
 # =====================================================================
-# SubFlow 生产编排：PostgreSQL + 结构同步 + 应用
+# SubFlow 生产编排：PostgreSQL + Redis + 结构同步 + 应用 + Worker
 # 用法：复制 .env.example 为 .env 填好生产值 → docker compose up -d --build
+# 架构：app 只做 Web/入队；worker 独立容器消费转写与导出队列（FFmpeg CPU
+#       与 Web 进程隔离，可单独重启/伸缩）；Redis 持久化任务与限流计数
 # =====================================================================
 services:
   db:
@@ -17,7 +19,20 @@ services:
       timeout: 3s
       retries: 12
 
-  # 一次性服务：同步数据库结构（幂等），app 等待其成功后启动
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF 持久化：容器重启后任务队列不丢
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # 一次性服务：同步数据库结构（幂等），app/worker 等待其成功后启动
   migrate:
     build:
       context: .
@@ -35,8 +50,9 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
+    environment: &app-env
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/subflow?schema=public
+      REDIS_URL: redis://redis:6379
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?请在 .env 配置 DASHSCOPE_API_KEY}
       SMS_DEV_MODE: ${SMS_DEV_MODE:-false}
       DEV_FIXED_CODE: ${DEV_FIXED_CODE:-}
@@ -46,12 +62,32 @@ services:
       PUBLIC_ASSET_BASE_URL: ${PUBLIC_ASSET_BASE_URL:-}
       SIGNUP_BONUS_SECONDS: ${SIGNUP_BONUS_SECONDS:-1800}
       ADMIN_PHONES: ${ADMIN_PHONES:-}
+      NEXT_PUBLIC_ICP_BEIAN: ${NEXT_PUBLIC_ICP_BEIAN:-}
+      LOCAL_UPLOAD_DIR: ./uploads
     volumes:
-      # 上传视频与导出成片持久化（宿主机目录便于备份/迁移 OSS）
+      # 上传视频与导出成片持久化（与 worker 共享宿主机目录）
       - ./uploads:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # 队列消费端：转写（ASR/LLM）+ 导出（FFmpeg 烧录），独立进程可单独重启
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    environment: *app-env
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
 volumes:
   db-data:
+  redis-data:

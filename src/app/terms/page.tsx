@@ -30,12 +30,12 @@ export default function TermsPage() {
         <p className="mt-2 text-sm text-neutral-400">更新日期：{LAST_UPDATED}</p>
 
         <p className="mt-6 text-sm leading-relaxed text-neutral-600">
-          欢迎使用 SubFlow 字幕工坊（以下简称"本服务"）。本协议是你与本服务运营者之间关于使用本服务的约定。注册、登录或使用本服务即表示你已阅读并同意本协议全部内容。
+          欢迎使用 SubFlow 字幕工坊（以下简称&ldquo;本服务&rdquo;）。本协议是你与本服务运营者之间关于使用本服务的约定。注册、登录或使用本服务即表示你已阅读并同意本协议全部内容。
         </p>
 
         <Clause title="一、服务说明">
           <p>1. 本服务为视频字幕工具：你上传视频后，服务通过语音识别与 AI 文本润色自动生成字幕，支持字幕编辑、烧录导出与 SRT 导出。</p>
-          <p>2. 本服务按"现状"提供，我们将持续优化服务质量和功能，但不保证服务完全无中断或无错误。</p>
+          <p>2. 本服务按&ldquo;现状&rdquo;提供，我们将持续优化服务质量和功能，但不保证服务完全无中断或无错误。</p>
         </Clause>
 
         <Clause title="二、账号与安全">

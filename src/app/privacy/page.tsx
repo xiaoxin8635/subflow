@@ -31,7 +31,7 @@ export default function PrivacyPage() {
         <p className="mt-2 text-sm text-neutral-400">更新日期：{LAST_UPDATED}</p>
 
         <p className="mt-6 text-sm leading-relaxed text-neutral-600">
-          SubFlow 字幕工坊（以下简称"本服务"）非常重视你的个人信息与隐私保护。本政策说明我们如何收集、使用、存储和保护你的信息，以及你享有的相关权利。请在使用本服务前仔细阅读本政策。
+          SubFlow 字幕工坊（以下简称&ldquo;本服务&rdquo;）非常重视你的个人信息与隐私保护。本政策说明我们如何收集、使用、存储和保护你的信息，以及你享有的相关权利。请在使用本服务前仔细阅读本政策。
         </p>
 
         <Clause title="一、我们收集的信息">

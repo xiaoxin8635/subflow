@@ -1,10 +1,14 @@
 /**
- * @file 导出流水线（FFmpeg 烧录字幕 + 额度扣减）
+ * @file 导出流水线（FFmpeg 烧录字幕 + 额度扣减；Redis 队列驱动，Worker 消费）
  * @description ExportTask 状态机：PENDING → PROCESSING → DONE / FAILED。
  *              流程：样式契约 + 字幕分段编译为 ASS 文件（写入 uploads/exports/），
  *              FFmpeg `ass` 滤镜烧录（libx264 重编码视频、音频直拷），成功后在
- *              单个事务内完成任务置 DONE + 扣减额度 + 写额度流水；任一步失败则
- *              置 FAILED 并记录原因，不扣额度。
+ *              单个事务内完成任务置 DONE + 扣减额度 + 写额度流水。
+ *              入口 startExport 仅负责入队（BullMQ 导出队列）；Redis 不可用时降级
+ *              进程内直跑。processExport 只执行不兜错——错误上抛给 Worker 触发
+ *              自动重试，重试用尽后由 failed 事件调用 markExportFailed 落库。
+ *              允许 PROCESSING 状态重跑：Worker 崩溃后 stalled 任务恢复时
+ *              （状态停在 PROCESSING）重新执行整段烧录。
  *              注意：`-vf ass=` 滤镜内的路径使用相对路径（cwd=项目根），
  *              规避 Windows 盘符冒号在滤镜参数中的转义问题。
  */
@@ -14,6 +18,7 @@ import { spawn } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
 import { buildAss } from "@/lib/ass";
+import { enqueueExport } from "@/lib/queue/queues";
 import type { StoredSegment } from "@/lib/asr/types";
 
 /** 导出产物目录（与上传目录同级：uploads/exports/） */
@@ -40,20 +45,36 @@ async function ensureExportsDir(): Promise<void> {
 }
 
 /**
- * 启动导出任务（不阻塞调用方；兜底记录未捕获异常）
+ * 启动导出任务：优先入队（Worker 消费），Redis 不可用时降级进程内直跑
  * @param taskId ExportTask ID
+ * @param userId 用户 ID（用于付费优先级计算）
  */
-export function startExport(taskId: string): void {
-  void processExport(taskId).catch((e) => {
-    console.error(`[export] 导出任务 ${taskId} 异常：`, e);
+export async function startExport(taskId: string, userId: string): Promise<void> {
+  const queued = await enqueueExport(taskId, userId);
+  if (queued) return;
+  // 降级：进程内执行并在失败时直接落 FAILED（无重试语义，与队列行为对齐）
+  void processExport(taskId).catch(async (e) => {
+    await markExportFailed(taskId, e instanceof Error ? e.message : "导出失败");
   });
 }
 
 /**
+ * 将导出任务标记为失败（重试用尽后的死信落库；任务行可能已被级联删除需容错）
+ * @param taskId  ExportTask ID
+ * @param message 失败原因
+ */
+export async function markExportFailed(taskId: string, message: string): Promise<void> {
+  await db.exportTask
+    .update({ where: { id: taskId }, data: { status: "FAILED", error: message, finishedAt: new Date() } })
+    .catch(() => {});
+}
+
+/**
  * 执行导出任务：生成 ASS → FFmpeg 烧录 → 事务（置 DONE + 扣额度 + 流水）
+ * 失败时清理半成品后向上抛错（由 Worker 决定重试或最终标记 FAILED）。
  * @param taskId ExportTask ID
  */
-async function processExport(taskId: string): Promise<void> {
+export async function processExport(taskId: string): Promise<void> {
   const task = await db.exportTask.findUnique({
     where: { id: taskId },
     include: {
@@ -61,8 +82,8 @@ async function processExport(taskId: string): Promise<void> {
       style: true,
     },
   });
-  // 任务已被删除（如项目删除级联）或非初始态（防 dev 热重载重跑）：直接返回
-  if (!task || task.status !== "PENDING" || !task.project.videoKey) return;
+  // 任务已删除/已完成/失败终态（防重复执行）；PROCESSING 允许：stalled 恢复重跑
+  if (!task || (task.status !== "PENDING" && task.status !== "PROCESSING") || !task.project.videoKey) return;
 
   const { project, style } = task;
   const assAbsPath = path.join(exportsAbsDir(), `${taskId}.ass`);
@@ -162,13 +183,9 @@ async function processExport(taskId: string): Promise<void> {
     });
     console.log(`[export] 任务 ${taskId} 完成：${project.title}，扣费 ${costSeconds} 秒`);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "导出失败";
-    console.error(`[export] 任务 ${taskId} 失败：${message}`);
-    await db.exportTask
-      .update({ where: { id: taskId }, data: { status: "FAILED", error: message, finishedAt: new Date() } })
-      .catch(() => {});
-    // 失败时清理半成品输出（可能是不完整文件）
+    // 失败时清理半成品输出（可能是不完整文件），错误上抛交由调用方重试/落 FAILED
     await fs.unlink(outAbsPath).catch(() => {});
+    throw err instanceof Error ? err : new Error("导出失败");
   } finally {
     // ASS 文件是中间产物，无论成败都清理
     await fs.unlink(assAbsPath).catch(() => {});

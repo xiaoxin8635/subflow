@@ -1,9 +1,11 @@
 /**
- * @file 项目处理流水线（进程内异步任务）
+ * @file 项目处理流水线（Redis 队列驱动，Worker 消费）
  * @description 状态机：UPLOADED → TRANSCRIBING（抽音频+ASR）→ POLISHING（LLM 润色）
  *              → READY / FAILED（原因写入 Project.error）。
- *              MVP 采用进程内 fire-and-forget，不引入消息队列；dev 模式热重载会中断
- *              进行中的任务（重传即可），生产为常驻 Node 进程不受影响。
+ *              入口 startProcessing 仅负责入队（BullMQ 转写队列）；Redis 不可用时
+ *              降级为进程内直跑（job 未入队，无重复风险）。
+ *              processProject 只执行不兜错——错误上抛给 Worker 以触发自动重试，
+ *              重试用尽后由 Worker 的 failed 事件调用 markProjectFailed 落库。
  */
 import os from "node:os";
 import path from "node:path";
@@ -14,24 +16,40 @@ import { localVideoPath, publicUrlFor } from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
 import { polishSegments } from "@/lib/polish";
+import { enqueueTranscribe } from "@/lib/queue/queues";
 import { MAX_VIDEO_DURATION_SEC } from "@/lib/constants";
 
 /**
- * 启动后台处理任务（不阻塞调用方；未捕获异常兜底打日志）
+ * 启动转写任务：优先入队（Worker 消费），Redis 不可用时降级进程内直跑
  * @param projectId 项目 ID
+ * @param userId    用户 ID（用于付费优先级计算）
  */
-export function startProcessing(projectId: string): void {
-  void processProject(projectId).catch((e) => {
-    console.error(`[pipeline] 项目 ${projectId} 流水线异常：`, e);
+export async function startProcessing(projectId: string, userId: string): Promise<void> {
+  const queued = await enqueueTranscribe(projectId, userId);
+  if (queued) return;
+  // 降级：进程内执行并在失败时直接落 FAILED（无重试语义，与队列行为对齐）
+  void processProject(projectId).catch(async (e) => {
+    await markProjectFailed(projectId, e instanceof Error ? e.message : "处理失败");
   });
 }
 
 /**
+ * 将项目标记为失败（重试用尽后的死信落库；表行可能已被删除需容错）
+ * @param projectId 项目 ID
+ * @param message   失败原因
+ */
+export async function markProjectFailed(projectId: string, message: string): Promise<void> {
+  await db.project
+    .update({ where: { id: projectId }, data: { status: "FAILED", error: message } })
+    .catch(() => {});
+}
+
+/**
  * 执行完整流水线：探测时长 → 抽音频 → ASR 转写 → LLM 润色 → 结果落库
- * 任何一步失败都会把项目置为 FAILED 并记录原因。
+ * 任何一步失败都会向上抛错（由 Worker 决定重试或最终标记 FAILED）。
  * @param projectId 项目 ID
  */
-async function processProject(projectId: string): Promise<void> {
+export async function processProject(projectId: string): Promise<void> {
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project || !project.videoKey) return;
 
@@ -79,12 +97,6 @@ async function processProject(projectId: string): Promise<void> {
     });
     await db.project.update({ where: { id: projectId }, data: { status: "READY", error: null } });
     console.log(`[pipeline] 项目 ${projectId} 处理完成：${segments.length} 段（润色=${polished}）`);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "处理失败";
-    console.error(`[pipeline] 项目 ${projectId} 失败：${message}`);
-    await db.project
-      .update({ where: { id: projectId }, data: { status: "FAILED", error: message } })
-      .catch(() => {});
   } finally {
     await fs.unlink(tmpAudio).catch(() => {});
   }

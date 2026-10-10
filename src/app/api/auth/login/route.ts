@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 限流：IP 与手机号双维度（只计格式合法的请求）
-  const byIp = rateLimit(req, "login", `ip:${getClientIp(req)}`, IP_HOURLY_LIMIT, 60 * 60 * 1000);
-  const byPhone = rateLimit(req, "login", `phone:${phone}`, PHONE_HOURLY_LIMIT, 60 * 60 * 1000);
+  const byIp = await rateLimit(req, "login", `ip:${getClientIp(req)}`, IP_HOURLY_LIMIT, 60 * 60 * 1000);
+  const byPhone = await rateLimit(req, "login", `phone:${phone}`, PHONE_HOURLY_LIMIT, 60 * 60 * 1000);
   if (!byIp.ok || !byPhone.ok) {
     const retry = Math.max(byIp.retryAfterSec, byPhone.retryAfterSec);
     return NextResponse.json(

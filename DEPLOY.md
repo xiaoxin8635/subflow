@@ -5,11 +5,20 @@
 ## 架构总览
 
 ```
-用户浏览器 ──HTTPS──▶ Caddy(自动证书) ──▶ Next.js(docker, :3000)
+用户浏览器 ──HTTPS──▶ Caddy(自动证书) ──▶ Next.js app(docker, :3000)
                                             ├─ PostgreSQL 16 (docker, 数据卷)
-                                            └─ /app/uploads (宿主机卷：源视频+导出成片)
+                                            ├─ Redis 7 (docker, AOF 持久化)
+                                            │    ├─ 任务队列：转写 / 导出（BullMQ）
+                                            │    └─ 分布式限流计数（Lua 滑动窗口）
+                                            ├─ Worker(docker, 独立容器)
+                                            │    ├─ 转写消费（并发 TRANSCRIBE_CONCURRENCY，默认 3）
+                                            │    └─ 导出消费（FFmpeg 烧录，并发 EXPORT_CONCURRENCY，默认 1）
+                                            └─ /app/uploads (宿主机卷：app 与 worker 共享，源视频+导出成片)
 ```
 
+- app 只做 Web 与入队；worker 独立容器消费任务，FFmpeg 重编码不抢 Web 进程 CPU，可单独重启/伸缩
+- 任务在 Redis 持久化：app/worker 容器重启不丢任务；worker 崩溃时在跑任务被检测为 stalled 后自动重试（重试用尽标记 FAILED，原因写入数据库）
+- 付费用户任务优先消费（有有效订阅的用户 priority=1）
 - 应用以 `output: "standalone"` 产物运行，自带 ffmpeg/ffprobe 二进制，宿主机无需安装
 - 数据库结构同步由一次性 `migrate` 容器执行（`prisma db push`，幂等）
 
@@ -41,7 +50,7 @@ vim .env
 # 构建并启动（首次构建约 5-10 分钟，主要耗时在下载 ffmpeg 二进制）
 docker compose up -d --build
 
-# 看日志确认三件事：migrate 成功退出、app 无报错、健康检查通过
+# 看日志确认四件事：migrate 成功退出、redis 健康、app 无报错、worker 打印「已启动」
 docker compose logs -f
 ```
 
@@ -83,8 +92,10 @@ apt install -y caddy && systemctl reload caddy
 ## 日常运维
 
 ```bash
-docker compose logs -f app        # 看应用日志（含转写/导出流水线错误）
+docker compose logs -f app        # 看应用日志（Web/入队/限流）
+docker compose logs -f worker     # 看 Worker 日志（转写/导出执行、重试与死信）
 docker compose restart app        # 重启应用（更新 .env 后需要）
+docker compose restart worker     # 重启 Worker（在跑任务会 stalled 自动重试，不丢）
 docker compose up -d --build      # 更新代码后重新构建部署
 docker compose exec db pg_dump -U postgres subflow > backup.sql   # 手动备份
 ```
@@ -93,6 +104,4 @@ docker compose exec db pg_dump -U postgres subflow > backup.sql   # 手动备份
 
 - **带宽瓶颈**：视频经服务器中转（上传→转写→下载成片），3-5Mbps 带宽下 500MB 视频传完约 15-25 分钟。
   正式运营建议接 OSS 直传 + CDN（应用层已预留 `publicUrlFor` 抽象，替换 storage.ts 即可）
-- **进程内任务队列**：转写/导出为进程内 fire-and-forget，容器重启会中断进行中的任务（用户重传/重导即可）。
-  上量后可换 Redis 队列 + 任务表持久化
-- **单机部署**：compose 单机方案，无横向扩展。日活过千再考虑
+- **单机部署**：compose 单机方案（Redis 队列已就绪，水平扩展只差文件上 OSS + 多实例）。日活过千再考虑

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   // 限流：与整传 POST /api/projects 共用同一配额（每用户每小时 10 个新项目）
-  const rl = rateLimit(request, "upload", user.id, 10, 60 * 60 * 1000);
+  const rl = await rateLimit(request, "upload", user.id, 10, 60 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: `上传过于频繁，每小时最多 10 个视频，请 ${Math.ceil(rl.retryAfterSec / 60)} 分钟后再试` },

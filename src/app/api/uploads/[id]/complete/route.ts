@@ -45,7 +45,7 @@ export async function POST(
     });
 
     // 异步启动转写流水线（与整传一致：fire-and-forget）
-    startProcessing(project.id);
+    void startProcessing(project.id, user.id);
 
     return NextResponse.json({ projectId: project.id });
   } catch (e) {

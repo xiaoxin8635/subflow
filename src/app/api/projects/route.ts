@@ -67,7 +67,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   // 限流：每用户每小时最多 10 个新项目
-  const rl = rateLimit(request, "upload", user.id, UPLOAD_HOURLY_LIMIT, 60 * 60 * 1000);
+  const rl = await rateLimit(request, "upload", user.id, UPLOAD_HOURLY_LIMIT, 60 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: `上传过于频繁，每小时最多 ${UPLOAD_HOURLY_LIMIT} 个视频，请 ${Math.ceil(rl.retryAfterSec / 60)} 分钟后再试` },
@@ -131,7 +131,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // 上传完成，异步启动转写流水线
-  startProcessing(project.id);
+  void startProcessing(project.id, user.id);
 
   return NextResponse.json({ projectId: project.id });
 }

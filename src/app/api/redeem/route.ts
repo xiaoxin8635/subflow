@@ -26,7 +26,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   // 限流：每用户每小时最多 10 次兑换尝试（防激活码穷举；正常用户远达不到）
-  const rl = rateLimit(request, "redeem", user.id, 10, 60 * 60 * 1000);
+  const rl = await rateLimit(request, "redeem", user.id, 10, 60 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "兑换过于频繁，请稍后再试" },

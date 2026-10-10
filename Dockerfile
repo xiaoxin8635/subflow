@@ -7,7 +7,8 @@
 #   deps     —— 安装全部依赖（含 ffmpeg/ffprobe 平台二进制下载）
 #   builder  —— prisma generate + next build（产出 .next/standalone）
 #   migrator —— 携带完整 prisma CLI，运行 npx prisma db push 后退出
-#   runner   —— 仅 standalone 产物 + static + public 的精简运行镜像
+#   runner   —— 仅 standalone 产物 + static + public 的精简 Web 运行镜像
+#   worker   —— 队列消费端（tsx 直跑 TS 源码，与 app 同源码不同入口）
 # =====================================================================
 
 # ---------- deps：安装依赖 ----------
@@ -60,3 +61,27 @@ VOLUME ["/app/uploads"]
 USER subflow
 EXPOSE 3000
 CMD ["node", "server.js"]
+
+# ---------- worker：队列消费端（转写 + FFmpeg 导出） ----------
+FROM node:20-bookworm-slim AS worker
+WORKDIR /app
+ENV NODE_ENV=production \
+    # 上传目录固定为容器内 /app/uploads（compose 与 app 共享宿主机目录）
+    LOCAL_UPLOAD_DIR=./uploads
+
+RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs subflow
+
+# 完整依赖（含 dev 依赖 tsx 与 prisma CLI）+ 生成 Prisma Client
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Worker 运行所需源码与配置（tsx 按 tsconfig paths 解析 @/ 别名）
+COPY src ./src
+COPY tsconfig.json package.json ./
+
+RUN mkdir -p /app/uploads && chown -R subflow:nodejs /app/uploads
+VOLUME ["/app/uploads"]
+
+USER subflow
+CMD ["npx", "tsx", "src/worker/index.ts"]

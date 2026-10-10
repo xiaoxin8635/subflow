@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 限流 0：同一 IP 每小时最多 20 次（攻击者换手机号也无法绕过）
-  const byIp = rateLimit(req, "sms", `ip:${getClientIp(req)}`, IP_HOURLY_LIMIT, 60 * 60 * 1000);
+  const byIp = await rateLimit(req, "sms", `ip:${getClientIp(req)}`, IP_HOURLY_LIMIT, 60 * 60 * 1000);
   if (!byIp.ok) {
     return NextResponse.json(
       { error: "操作过于频繁，请 1 小时后再试" },

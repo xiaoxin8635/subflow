@@ -25,7 +25,7 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   // 限流：每用户每小时最多 20 次导出创建（FFmpeg 吃 CPU，防刷）
-  const rl = rateLimit(request, "export", user.id, 20, 60 * 60 * 1000);
+  const rl = await rateLimit(request, "export", user.id, 20, 60 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "导出操作过于频繁，请稍后再试" },
@@ -78,7 +78,7 @@ export async function POST(
   const task = await db.exportTask.create({
     data: { projectId: id, styleId, resolution: "original" },
   });
-  startExport(task.id);
+  void startExport(task.id, user.id);
 
   return NextResponse.json({
     taskId: task.id,
