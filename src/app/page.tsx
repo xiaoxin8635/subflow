@@ -11,7 +11,7 @@ const FEATURES = [
   {
     icon: "🎯",
     title: "精准转写",
-    desc: "基于阿里云 Paraformer 语音识别，中文识别准确率业界领先，自动打轴、按句分段。",
+    desc: "基于阿里云百炼语音识别大模型（qwen3-asr），中文识别准确率业界领先，自动打轴、按句分段。",
   },
   {
     icon: "✨",
@@ -31,7 +31,7 @@ const FEATURES = [
   {
     icon: "⬇️",
     title: "一键导出",
-    desc: "字幕直接烧录进视频，支持 720p / 1080p，同时提供 SRT 文件用于二次剪辑。",
+    desc: "字幕保持原画质烧录进视频，同时提供 SRT 文件，可直接导入剪映 / PR 二次剪辑。",
   },
   {
     icon: "🔒",
@@ -55,7 +55,7 @@ const PRICING = [
     price: "¥0",
     unit: "",
     desc: "注册即送 30 分钟转写额度",
-    features: ["完整功能体验", "720p 导出", "全部样式模板"],
+    features: ["完整功能体验", "高清烧录导出", "SRT 字幕导出", "全部样式模板"],
     cta: "免费开始",
     highlighted: false,
   },
@@ -64,7 +64,7 @@ const PRICING = [
     price: "¥29",
     unit: "/月",
     desc: "适合个人创作者",
-    features: ["每月 5 小时转写额度", "1080p 导出", "全部样式模板", "优先队列"],
+    features: ["每月 5 小时转写额度", "高清烧录导出", "SRT 字幕导出", "全部样式模板"],
     cta: "立即开通",
     highlighted: true,
   },
@@ -73,7 +73,7 @@ const PRICING = [
     price: "¥99",
     unit: "/月",
     desc: "适合高频创作者 / 小团队",
-    features: ["每月 20 小时转写额度", "1080p 导出", "全部样式模板", "优先队列", "专属客服"],
+    features: ["每月 20 小时转写额度", "高清烧录导出", "SRT 字幕导出", "全部样式模板"],
     cta: "立即开通",
     highlighted: false,
   },
@@ -115,7 +115,7 @@ export default function HomePage() {
               </a>
             </div>
             <p className="mt-4 text-sm text-neutral-500">
-              注册即送 30 分钟额度 · 无需信用卡
+              注册即送 30 分钟额度 · 免费体验
             </p>
           </div>
         </section>

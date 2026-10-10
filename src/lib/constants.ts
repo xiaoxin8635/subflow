@@ -10,6 +10,9 @@ export const SIGNUP_BONUS_SECONDS = Number(process.env.SIGNUP_BONUS_SECONDS ?? 1
 /** 单个视频文件上传大小上限（字节），默认 500MB */
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
+/** 分片上传的每片大小（字节），默认 5MB（最后一片可小于此值） */
+export const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
+
 /** 单个视频时长上限（秒），默认 30 分钟 */
 export const MAX_VIDEO_DURATION_SEC = 30 * 60;
 

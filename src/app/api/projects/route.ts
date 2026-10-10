@@ -16,6 +16,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { MAX_UPLOAD_BYTES, ALLOWED_VIDEO_TYPES } from "@/lib/constants";
 import { ensureUploadDir, generateVideoKey, localVideoPath } from "@/lib/storage";
 import { startProcessing } from "@/lib/pipeline";
+import { rateLimit } from "@/lib/rate-limit";
+import { isValidVideoMagic } from "@/lib/upload-session";
+
+/** 每用户新建项目频率上限（个/小时），防刷上传占磁盘与 ASR 费用 */
+const UPLOAD_HOURLY_LIMIT = 10;
 
 /** MIME → 扩展名映射（白名单内） */
 const EXT_BY_TYPE: Record<string, string> = {
@@ -25,16 +30,25 @@ const EXT_BY_TYPE: Record<string, string> = {
   "video/webm": ".webm",
 };
 
-/** 限流 Transform：累计字节数超过上限时抛错，中断整条管道 */
+/** 限流 Transform：累计字节数超上限抛 FILE_TOO_LARGE；首块顺带校验文件魔数 */
 class SizeLimitStream extends Transform {
   private written = 0;
+  private checkedMagic = false;
 
-  /** 流式转换：仅计数校验，原样透传 */
+  /** 流式转换：魔数 + 大小校验，原样透传 */
   _transform(
     chunk: Buffer,
     _encoding: BufferEncoding,
     callback: (err: Error | null, data?: Buffer) => void,
   ): void {
+    // 首块校验魔数：非视频内容立即中断（防改后缀上传任意文件）
+    if (!this.checkedMagic) {
+      this.checkedMagic = true;
+      if (!isValidVideoMagic(chunk)) {
+        callback(new Error("NOT_VIDEO"));
+        return;
+      }
+    }
     this.written += chunk.length;
     if (this.written > MAX_UPLOAD_BYTES) {
       callback(new Error("FILE_TOO_LARGE"));
@@ -51,6 +65,15 @@ class SizeLimitStream extends Transform {
 export async function POST(request: Request): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
+
+  // 限流：每用户每小时最多 10 个新项目
+  const rl = rateLimit(request, "upload", user.id, UPLOAD_HOURLY_LIMIT, 60 * 60 * 1000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `上传过于频繁，每小时最多 ${UPLOAD_HOURLY_LIMIT} 个视频，请 ${Math.ceil(rl.retryAfterSec / 60)} 分钟后再试` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
+  }
 
   // 余额预检：额度耗尽的用户不允许新建（提示先兑换额度）
   if (user.balanceSeconds <= 0) {
@@ -100,6 +123,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 413 },
       );
     }
+    if (err instanceof Error && err.message === "NOT_VIDEO") {
+      return NextResponse.json({ error: "文件内容不是有效的视频格式" }, { status: 415 });
+    }
     console.error("[upload] 写盘失败：", err);
     return NextResponse.json({ error: "上传失败，请重试" }, { status: 500 });
   }
@@ -111,27 +137,39 @@ export async function POST(request: Request): Promise<NextResponse> {
 }
 
 /**
- * 获取当前用户的项目列表
+ * 获取当前用户的项目列表（分页）
+ * @param request 查询参数 page（默认 1）、pageSize（默认 20，上限 100）
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
-  const projects = await db.project.findMany({
-    where: { userId: user.id },
-    orderBy: { updatedAt: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      durationSec: true,
-      error: true,
-      createdAt: true,
-      updatedAt: true,
-      transcript: { select: { llmPolished: true } },
-    },
-  });
+  const url = new URL(request.url);
+  const page = Math.max(1, Math.floor(Number(url.searchParams.get("page")) || 1));
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 20)),
+  );
+
+  const [total, projects] = await Promise.all([
+    db.project.count({ where: { userId: user.id } }),
+    db.project.findMany({
+      where: { userId: user.id },
+      orderBy: { updatedAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        durationSec: true,
+        error: true,
+        createdAt: true,
+        updatedAt: true,
+        transcript: { select: { llmPolished: true } },
+      },
+    }),
+  ]);
 
   return NextResponse.json({
     projects: projects.map((p) => ({
@@ -144,5 +182,9 @@ export async function GET(): Promise<NextResponse> {
       updatedAt: p.updatedAt,
       llmPolished: p.transcript?.llmPolished ?? null,
     })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
   });
 }

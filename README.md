@@ -21,7 +21,9 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **模块 ③**：字幕编辑器（视频预览 + 逐行编辑 + 样式切换）
 - [x] **模块 ④**：FFmpeg 烧录导出 + 额度扣减 + 激活码兑换
 - [x] **模块 ⑤**：管理后台 + 购买页 + 生产构建/部署产物（`DEPLOY.md`）
-- [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码 + 法务页（见 `DEPLOY.md` 清单）
+- [x] **P0 加固**（`docs/ROADMAP.md` 第一期）：SRT 导出、法务页、API 限流防刷、
+      分片上传 + 断点续传、项目列表分页、落地页宣传修正
+- [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
 
@@ -107,6 +109,9 @@ node scripts/e2e-pipeline-test.mjs
 # 导出链路：生成激活码 → 兑换（含防刷 409/404）→ 创建导出 → 轮询至 DONE
 #           → 下载成片 → ffprobe 校验时长 → PSNR 验证字幕已烧录 → 扣费与流水校验
 node scripts/e2e-export-test.mjs
+
+# P0 专项：分片上传（中断→resume→续传→合并）→ SRT 断言 → 魔数拒绝 → 分页 → 限流
+node scripts/e2e-p0-test.mjs
 
 # 生成激活码（落库并打印）
 node scripts/gen-redeem-codes.mjs --seconds 600 --count 5

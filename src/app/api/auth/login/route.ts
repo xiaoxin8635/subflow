@@ -10,6 +10,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PHONE_RE, SIGNUP_BONUS_SECONDS } from "@/lib/constants";
 import { createSession, maskPhone, sha256 } from "@/lib/auth";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
+
+/** 同一 IP 每小时登录尝试上限（验证码穷举防御，覆盖换手机号攻击） */
+const IP_HOURLY_LIMIT = 30;
+
+/** 同一手机号每小时登录尝试上限 */
+const PHONE_HOURLY_LIMIT = 10;
 
 /** 登录接口 */
 export async function POST(req: NextRequest) {
@@ -22,6 +29,18 @@ export async function POST(req: NextRequest) {
   if (!PHONE_RE.test(phone)) {
     return NextResponse.json({ error: "手机号格式不正确" }, { status: 400 });
   }
+
+  // 限流：IP 与手机号双维度（只计格式合法的请求）
+  const byIp = rateLimit(req, "login", `ip:${getClientIp(req)}`, IP_HOURLY_LIMIT, 60 * 60 * 1000);
+  const byPhone = rateLimit(req, "login", `phone:${phone}`, PHONE_HOURLY_LIMIT, 60 * 60 * 1000);
+  if (!byIp.ok || !byPhone.ok) {
+    const retry = Math.max(byIp.retryAfterSec, byPhone.retryAfterSec);
+    return NextResponse.json(
+      { error: `尝试过于频繁，请 ${retry > 60 ? `${Math.ceil(retry / 60)} 分钟` : `${retry} 秒`}后再试` },
+      { status: 429, headers: { "Retry-After": String(retry) } },
+    );
+  }
+
   if (!/^\d{6}$/.test(code)) {
     return NextResponse.json({ error: "请输入 6 位数字验证码" }, { status: 400 });
   }

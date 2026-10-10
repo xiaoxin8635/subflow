@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 /** 激活码展示格式清洗：去空格 + 统一大写（用户可能手动输入小写/带空格） */
 function normalizeCode(raw: string): string {
@@ -23,6 +24,15 @@ function normalizeCode(raw: string): string {
 export async function POST(request: Request): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
+
+  // 限流：每用户每小时最多 10 次兑换尝试（防激活码穷举；正常用户远达不到）
+  const rl = rateLimit(request, "redeem", user.id, 10, 60 * 60 * 1000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "兑换过于频繁，请稍后再试" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
+  }
 
   const body = (await request.json().catch(() => ({}))) as { code?: unknown };
   const code = typeof body.code === "string" ? normalizeCode(body.code) : "";

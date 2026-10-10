@@ -76,7 +76,7 @@ apt install -y caddy && systemctl reload caddy
 - [ ] **管理后台**：`ADMIN_PHONES` 填你自己的手机号，登录后访问 `/admin` 生成激活码
 - [ ] **收款码**：把个人微信/支付宝收款码截图放到 `public/pay-qr/wechat.png`、`alipay.png`，
       确认 `/pricing` 页正常显示后重新 `docker compose up -d --build`
-- [ ] **法务页**：补 `/privacy` 隐私协议与 `/terms` 用户协议（ICP 备案要求网站底部展示备案号）
+- [ ] **法务页**：`/privacy` 与 `/terms` 页面已内置，上线前把条款中的主体名称、联系方式替换为真实信息；`NEXT_PUBLIC_ICP_BEIAN` 填备案号（页脚自动展示，ICP 备案要求网站底部展示备案号）
 - [ ] **备份数据库**：`docker compose exec db pg_dump -U postgres subflow > backup.sql` 写进 crontab（每日一次）
 - [ ] **修改测试套餐价格**：`npx tsx prisma/seed.mjs` 写入的是演示价格，上线前到 `/admin` 或数据库调整为真实售价
 

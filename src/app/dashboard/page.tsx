@@ -1,7 +1,8 @@
 /**
  * @file 工作台页面（项目列表）
  * @description 服务端组件：未登录重定向到 /login；已登录显示脱敏手机号、剩余额度
- *              与项目列表（含状态徽章/时长/失败原因）。上传入口跳 /dashboard/new。
+ *              与项目列表（含状态徽章/时长/失败原因），支持 ?page=N 分页（每页 20 条）。
+ *              上传入口跳 /dashboard/new。
  */
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -13,6 +14,9 @@ import { ProjectStatusBadge, formatDuration } from "@/components/project-status"
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
 export const instant = false;
 
+/** 每页项目数 */
+const PAGE_SIZE = 20;
+
 /** 秒数格式化为「X 小时 Y 分钟」 */
 function formatSeconds(total: number): string {
   const hours = Math.floor(total / 3600);
@@ -23,15 +27,29 @@ function formatSeconds(total: number): string {
 }
 
 /** 工作台入口组件 */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const projects = await db.project.findMany({
-    where: { userId: user.id },
-    orderBy: { updatedAt: "desc" },
-    take: 100,
-  });
+  // 解析页码（非法值回退第 1 页）
+  const rawPage = await searchParams;
+  const pageParam = Array.isArray(rawPage.page) ? rawPage.page[0] : rawPage.page;
+  const page = Math.max(1, Math.floor(Number(pageParam) || 1));
+
+  const [total, projects] = await Promise.all([
+    db.project.count({ where: { userId: user.id } }),
+    db.project.findMany({
+      where: { userId: user.id },
+      orderBy: { updatedAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50">
@@ -105,6 +123,39 @@ export default async function DashboardPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {/* 分页控件（多于 1 页时展示） */}
+        {totalPages > 1 && (
+          <nav className="mt-8 flex items-center justify-center gap-2 text-sm">
+            {page > 1 ? (
+              <Link
+                href={`/dashboard?page=${page - 1}`}
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 transition-colors hover:border-neutral-300"
+              >
+                上一页
+              </Link>
+            ) : (
+              <span className="rounded-lg border border-neutral-100 bg-neutral-100 px-3 py-1.5 text-neutral-300">
+                上一页
+              </span>
+            )}
+            <span className="px-2 text-neutral-500">
+              第 {page} / {totalPages} 页 · 共 {total} 个项目
+            </span>
+            {page < totalPages ? (
+              <Link
+                href={`/dashboard?page=${page + 1}`}
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 transition-colors hover:border-neutral-300"
+              >
+                下一页
+              </Link>
+            ) : (
+              <span className="rounded-lg border border-neutral-100 bg-neutral-100 px-3 py-1.5 text-neutral-300">
+                下一页
+              </span>
+            )}
+          </nav>
         )}
       </main>
     </div>

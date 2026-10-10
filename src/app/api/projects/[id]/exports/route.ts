@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { startExport } from "@/lib/export-pipeline";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * 创建导出任务
@@ -22,6 +23,15 @@ export async function POST(
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
+
+  // 限流：每用户每小时最多 20 次导出创建（FFmpeg 吃 CPU，防刷）
+  const rl = rateLimit(request, "export", user.id, 20, 60 * 60 * 1000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "导出操作过于频繁，请稍后再试" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
+  }
 
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { styleId?: unknown };

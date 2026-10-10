@@ -11,12 +11,16 @@ import { db } from "@/lib/db";
 import { PHONE_RE } from "@/lib/constants";
 import { isSmsDevMode, sendVerificationCode } from "@/lib/sms";
 import { sha256 } from "@/lib/auth";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
 /** 重发冷却时间（毫秒） */
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
-/** 每小时发送上限 */
+/** 每小时发送上限（同一手机号） */
 const HOURLY_LIMIT = 5;
+
+/** 每小时发送上限（同一 IP，防换号绕过） */
+const IP_HOURLY_LIMIT = 20;
 
 /** 验证码有效期（毫秒） */
 const CODE_TTL_MS = 5 * 60 * 1000;
@@ -27,6 +31,15 @@ export async function POST(req: NextRequest) {
   const phone = body?.phone ?? "";
   if (!PHONE_RE.test(phone)) {
     return NextResponse.json({ error: "手机号格式不正确" }, { status: 400 });
+  }
+
+  // 限流 0：同一 IP 每小时最多 20 次（攻击者换手机号也无法绕过）
+  const byIp = rateLimit(req, "sms", `ip:${getClientIp(req)}`, IP_HOURLY_LIMIT, 60 * 60 * 1000);
+  if (!byIp.ok) {
+    return NextResponse.json(
+      { error: "操作过于频繁，请 1 小时后再试" },
+      { status: 429, headers: { "Retry-After": String(byIp.retryAfterSec) } },
+    );
   }
 
   // 限流 1：60 秒冷却
