@@ -52,6 +52,10 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 （多阶段构建：migrate 一次性容器同步表结构 + standalone 精简运行镜像，自带 ffmpeg）、
 Caddy HTTPS、上线前检查清单与日常运维命令。
 
+## 后续规划
+
+见 [docs/ROADMAP.md](docs/ROADMAP.md)：三期开发路线（P0 上线前必做 → P1 高并发与增强 → P2 增长扩展），含功能清单、架构演进步骤与工作量预估。
+
 ### 字幕编辑器说明（模块 ③）
 
 - 视频回放：`GET /api/projects/[id]/video` 支持 HTTP Range（拖动进度、倍速）

@@ -56,3 +56,6 @@ next-env.d.ts
 /scripts/samples/*.mp3
 /scripts/samples/*.wav
 /scripts/samples/*.mp4
+
+# 演示素材产物（TTS 语音与合成视频，由 scripts/gen-demo-tts.ps1 + FFmpeg 生成）
+/test-media/
