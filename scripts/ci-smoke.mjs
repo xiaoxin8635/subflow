@@ -74,9 +74,10 @@ const init = await (await fetch(`${BASE}/api/uploads/init`, {
 })).json();
 check("上传会话创建成功", !!init.uploadId, JSON.stringify(init).slice(0, 120));
 if (init.uploadId) {
+  // oss 模式分片直传 OSS 签名 URL（无需会话）；local 模式走 API 路由（需登录态）
   const put = await fetch(
     init.mode === "oss" ? init.partUrls[0] : `${BASE}/api/uploads/${init.uploadId}/chunks/0`,
-    { method: init.mode === "oss" ? "PUT" : "PUT", body: fake },
+    { method: "PUT", body: fake, headers: init.mode === "oss" ? {} : { Cookie: cookie } },
   );
   check("分片上传接受", put.ok, `HTTP ${put.status}`);
   const badComplete = await fetch(`${BASE}/api/uploads/${init.uploadId}/complete`, {
