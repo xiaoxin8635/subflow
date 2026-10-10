@@ -31,6 +31,8 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       预览/下载 302 签名 URL；local 驱动保留，双模式全链路 E2E 验证
 - [x] **P1 可观测性**（`docs/ROADMAP.md` 2.6）：结构化 JSON 日志 + 钉钉机器人告警
       （任务最终失败/额度守卫/进程异常）+ 管理后台失败任务页与一键重试
+- [x] **P1 多格式导出**（`docs/ROADMAP.md` 2.4）：字幕文件 SRT / VTT / ASS 三格式
+      下载（ASS 带样式与关键词高亮，可选 styleId），不消耗额度
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -38,6 +40,10 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - 烧录链路：样式契约 + 字幕分段 → [ass.ts](src/lib/ass.ts) 编译为 ASS（PlayRes 1920x1080，
   关键词高亮用 `{\c}` 行内覆盖标签）→ FFmpeg `ass` 滤镜烧录（libx264 重编码、音频直拷）。
   滤镜内使用相对路径，规避 Windows 盘符冒号转义问题
+- 字幕文件下载（[subtitle-download.ts](src/lib/subtitle-download.ts) 统一鉴权/校验）：
+  **SRT**（通用，剪映/PR，带 BOM 防乱码）/ **VTT**（网页播放器 HTML5 track，[vtt.ts](src/lib/vtt.ts)）/
+  **ASS**（带样式与关键词高亮，可选 `?styleId=`，缺省用默认样式）三格式，
+  纯文本生成零成本不扣额度
 - 任务化：`ExportTask` PENDING → PROCESSING → DONE/FAILED；同一项目同时只允许一个进行中任务（409）
 - 计费：按视频时长向上取整为秒；创建时余额预检（402），成功后在事务内
   「任务置 DONE + 条件扣减余额（防负数）+ 写 CreditLedger(reason=CONSUME_EXPORT)」，

@@ -40,6 +40,21 @@ const PLAY_RES_X = 1920;
 const PLAY_RES_Y = 1080;
 
 /**
+ * 默认样式配置（白字黑边、底部）：样式记录缺失/损坏时的兜底，
+ * 烧录流水线与 ASS 字幕下载接口共用，保证行为一致
+ */
+export const DEFAULT_ASS_CONFIG: AssStyleConfig = {
+  fontFamily: "Noto Sans SC",
+  fontSize: 5.2,
+  primaryColor: "#FFFFFF",
+  outlineColor: "#000000",
+  outlineWidth: 3,
+  position: "bottom",
+  marginV: 90,
+  highlight: "",
+};
+
+/**
  * #RRGGBB → ASS 颜色 &HAABBGGRR（ASS 为 BGR 字节序，AA=00 全不透明）
  * @param hex 十六进制颜色
  * @param alpha 透明度（00 = 不透明）

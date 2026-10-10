@@ -176,6 +176,57 @@ check("成片非空（>100KB）", buf.length > 100 * 1024, `${(buf.length / 1024
 const nfRes = await fetch(`${BASE}/api/exports/nonexistent/download`, { headers: { Cookie: cookie } });
 check("不存在任务下载 → 404", nfRes.status === 404, `实际 ${nfRes.status}`);
 
+/* ---------- ⑥' 字幕文件三格式下载（P1.4：SRT/VTT/ASS） ---------- */
+console.log("[7.5] 字幕文件三格式下载…");
+/** 拉取一个字幕格式并断言内容特征 */
+async function checkSubtitle(format, ext, mimePart, magicExpect) {
+  const r = await fetch(`${BASE}/api/projects/${target.id}/${ext}`, { headers: { Cookie: cookie } });
+  if (!r.ok) {
+    check(`字幕 ${ext.toUpperCase()} 下载 200`, false, `实际 ${r.status}`);
+    return;
+  }
+  check(`字幕 ${ext.toUpperCase()} Content-Type 正确`, (r.headers.get("content-type") ?? "").includes(mimePart),
+    r.headers.get("content-type") ?? "");
+  check(`字幕 ${ext.toUpperCase()} 带下载头`, (r.headers.get("content-disposition") ?? "").includes(`.${ext}`),
+    r.headers.get("content-disposition") ?? "");
+  const text = await r.text();
+  // SRT 带 BOM（Windows 兼容），其余直接魔数开头
+  check(`字幕 ${ext.toUpperCase()} 内容魔数正确`, text.includes(magicExpect),
+    `前 32 字符：${JSON.stringify(text.slice(0, 32))}`);
+}
+await checkSubtitle("srt", "srt", "x-subrip", "-->"); // SRT：BOM + 时间轴箭头
+await checkSubtitle("vtt", "vtt", "text/vtt", "WEBVTT"); // VTT：WEBVTT 魔数
+await checkSubtitle("ass", "ass", "x-ssa", "[Script Info]"); // ASS：脚本头
+
+// ASS 带 styleId 参数：合法样式生效 / 非法样式 400
+const assStyled = await fetch(`${BASE}/api/projects/${target.id}/ass?styleId=${defaultStyle.id}`, {
+  headers: { Cookie: cookie },
+});
+check("ASS 指定 styleId 下载 200", assStyled.ok, `实际 ${assStyled.status}`);
+const assBad = await fetch(`${BASE}/api/projects/${target.id}/ass?styleId=nonexistent`, {
+  headers: { Cookie: cookie },
+});
+check("ASS 非法 styleId → 400", assBad.status === 400, `实际 ${assBad.status}`);
+
+// 越权：其他登录用户拿不到本项目字幕（用 admin 号段登录，非项目归属人）
+const otherSms = await (await fetch(`${BASE}/api/auth/sms`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ phone: "13800008001" }),
+})).json();
+const otherLogin = await fetch(`${BASE}/api/auth/login`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ phone: "13800008001", code: otherSms.devCode }),
+});
+const otherCookie = (otherLogin.headers.get("set-cookie") ?? "").split(";")[0];
+if (otherCookie) {
+  const forbidden = await fetch(`${BASE}/api/projects/${target.id}/vtt`, { headers: { Cookie: otherCookie } });
+  check("非本人下载字幕 → 404", forbidden.status === 404, `实际 ${forbidden.status}`);
+} else {
+  check("非本人下载字幕 → 404", false, "admin 登录失败（可能发码冷却），跳过失败");
+}
+
 /* ---------- ⑦ ffprobe 校验成片 ---------- */
 console.log("[8] 校验成片时长与烧录效果…");
 const outDuration = probe(outPath);

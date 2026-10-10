@@ -21,7 +21,7 @@ import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { sendAlert } from "@/lib/alert";
-import { buildAss } from "@/lib/ass";
+import { buildAss, DEFAULT_ASS_CONFIG } from "@/lib/ass";
 import { enqueueExport } from "@/lib/queue/queues";
 import { ensureLocalVideo, isOss, removeLocalVideoCache } from "@/lib/storage";
 import { ossUploadFile } from "@/lib/oss";
@@ -111,19 +111,9 @@ export async function processExport(taskId: string): Promise<void> {
     // ①' 源视频本地路径（oss 模式先拉取到本地缓存，失败即抛错交由重试）
     const inputAbsPath = await ensureLocalVideo(project.videoKey!);
 
-    // ② 生成 ASS 文件（样式缺失时用「白字黑边、底部」兜底配置，保证仍可导出）
-    const fallbackConfig: Parameters<typeof buildAss>[0] = {
-      fontFamily: "Noto Sans SC",
-      fontSize: 5.2,
-      primaryColor: "#FFFFFF",
-      outlineColor: "#000000",
-      outlineWidth: 3,
-      position: "bottom",
-      marginV: 90,
-      highlight: "",
-    };
+    // ② 生成 ASS 文件（样式缺失时用共享默认配置兜底，保证仍可导出）
     const assContent = buildAss(
-      (style?.config as unknown as Parameters<typeof buildAss>[0]) ?? fallbackConfig,
+      (style?.config as unknown as Parameters<typeof buildAss>[0]) ?? DEFAULT_ASS_CONFIG,
       segments,
     );
     await fs.writeFile(assAbsPath, assContent, "utf8");

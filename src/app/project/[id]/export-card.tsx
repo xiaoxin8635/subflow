@@ -188,20 +188,40 @@ export function ExportCard({
         )}
       </div>
 
-      {/* SRT 字幕下载（纯文本生成不扣额度；读取库内数据，未保存修改时同样禁用） */}
-      <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+      {/* 字幕文件下载（纯文本生成不扣额度；读取库内数据，未保存修改时同样禁用） */}
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
         <p className="text-xs text-neutral-400">
-          SRT 字幕文件（供剪映 / PR 二次剪辑）· 不消耗额度{dirty && " · 有未保存修改时下载的是已保存版本"}
+          字幕文件下载 · 不消耗额度{dirty && " · 有未保存修改时下载的是已保存版本"}
         </p>
-        <a
-          href={`/api/projects/${projectId}/srt`}
-          title={dirty ? "建议先保存修改，下载内容为已保存版本" : undefined}
-          className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
-            dirty ? "opacity-60" : ""
-          }`}
-        >
-          ⬇ 下载 SRT
-        </a>
+        <div className="flex shrink-0 items-center gap-2">
+          <a
+            href={`/api/projects/${projectId}/srt`}
+            title={dirty ? "建议先保存修改，下载内容为已保存版本" : "通用格式：剪映 / PR / 达芬奇"}
+            className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
+              dirty ? "opacity-60" : ""
+            }`}
+          >
+            ⬇ SRT
+          </a>
+          <a
+            href={`/api/projects/${projectId}/vtt`}
+            title={dirty ? "建议先保存修改，下载内容为已保存版本" : "网页播放器通用（HTML5 track）"}
+            className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
+              dirty ? "opacity-60" : ""
+            }`}
+          >
+            ⬇ VTT
+          </a>
+          <a
+            href={`/api/projects/${projectId}/ass`}
+            title={dirty ? "建议先保存修改，下载内容为已保存版本" : "带样式与关键词高亮：mpv / PotPlayer 直接挂载"}
+            className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
+              dirty ? "opacity-60" : ""
+            }`}
+          >
+            ⬇ ASS
+          </a>
+        </div>
       </div>
 
       {/* 烧录进行中提示 */}
