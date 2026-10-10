@@ -3,6 +3,7 @@
  * @description 全局 HTML 结构、字体加载与 SEO 元信息。lang 设为 zh-CN。
  */
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
     "上传视频，AI 自动生成精准字幕：智能润色、关键词高亮、多套样式模板，一键导出成品。为短视频创作者打造。",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="zh-CN"
