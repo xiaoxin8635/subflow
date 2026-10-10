@@ -40,6 +40,9 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **P1 CI**（`docs/ROADMAP.md` 2.7）：GitHub Actions——push/PR 自动跑
       tsc + eslint + 生产构建 + 冒烟 E2E（真实起服务，零外部 API 调用）；
       CD 部署待服务器到位后追加（见 `DEPLOY.md`）
+- [x] **P2.1 音频直传**（`docs/ROADMAP.md` 第三期）：mp3 / m4a / wav 纯音频
+      播客/课程转字幕（复用转写链路），项目区分 mediaKind；
+      音频项目仅字幕文件下载（不提供烧录成片），前后端双重拦截
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -127,6 +130,16 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - **队列排位**：项目状态为 UPLOADED（排队中）时，详情接口附带 `queuePosition`
   （实时计算，含付费优先级——排队位置按 BullMQ prioritized zset 的真实消费顺序）；
   详情页显示「排队中（第 N 位）…」，3 秒轮询自动推进
+
+### 音频直传说明（P2.1）
+
+- **支持的纯音频格式**：mp3 / m4a / wav（播客、课程、录音转字幕），与视频共用同一条
+  分片上传 → 抽音频（`-vn` 对纯音频天然兼容）→ ASR → 润色链路，计费按时长不变
+- **mediaKind 字段**：Project 区分 video / audio（建项目时按 MIME 白名单写入）
+- **导出形态差异**：音频项目仅提供字幕文件下载（SRT/VTT/ASS，不消耗额度），
+  不提供烧录成片——前端导出卡隐藏入口 + 导出 API/流水线双重拦截（400）
+- 上传入口：`/dashboard/new` 支持音频与视频混选批量上传；魔数校验扩展
+  ID3 / MPEG frame sync / RIFF-WAVE（mp3/wav）等音频签名
 
 ### CI 说明（P1.7）
 
@@ -227,6 +240,10 @@ node scripts/e2e-notify-test.mjs
 # P1.5 批量处理专项：暂停队列制造排队 → 详情 API 排队位置（付费优先 FIFO）
 # → 恢复后转写完成位置清空 → 批量上传入口渲染
 node scripts/e2e-batch-test.mjs
+
+# P2.1 音频直传专项：MIME 白名单 → 伪音频魔数 415 → 真实 mp3 上传转写
+# → mediaKind=audio → SRT 下载 → 烧录导出被拒 400（运行约 1-2 分钟，真实调用 DashScope）
+node scripts/e2e-audio-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts

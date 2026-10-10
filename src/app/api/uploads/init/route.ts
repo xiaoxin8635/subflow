@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { ALLOWED_VIDEO_TYPES } from "@/lib/constants";
+import { mediaKindOf } from "@/lib/constants";
 import { initSession, UploadSessionError } from "@/lib/upload-session";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -41,10 +41,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const contentType = typeof body?.contentType === "string" ? body.contentType : "";
   const size = typeof body?.size === "number" ? Math.floor(body.size) : 0;
 
-  // MIME 白名单（与整传一致）
-  if (!(ALLOWED_VIDEO_TYPES as readonly string[]).includes(contentType)) {
+  // MIME 白名单（视频 + 纯音频，P2.1 音频直传）
+  const kind = mediaKindOf(contentType);
+  if (!kind) {
     return NextResponse.json(
-      { error: `不支持的视频格式：${contentType || "未知"}（仅支持 mp4/mov/mkv/webm）` },
+      { error: `不支持的媒体格式：${contentType || "未知"}（支持 mp4/mov/mkv/webm/mp3/m4a/wav）` },
       { status: 415 },
     );
   }

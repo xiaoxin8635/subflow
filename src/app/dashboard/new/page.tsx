@@ -1,7 +1,7 @@
 "use client";
 /**
- * @file 新建项目页（多文件批量上传，P1.5 批量处理）
- * @description 客户端组件：支持一次选择/拖入多个视频，串行逐个分片上传：
+ * @file 新建项目页（多文件批量上传，P1.5 批量处理；P2.1 起支持纯音频）
+ * @description 客户端组件：支持一次选择/拖入多个视频或音频（mp3/m4a/wav），串行逐个分片上传：
  *   ① POST /api/uploads/init 创建会话（或凭 sessionStorage 中的 uploadId 断点续传）
  *   ② 3 片并发上传分片（每片失败自动重试 2 次）：
  *      local 模式 → PUT /api/uploads/[id]/chunks/[index]（经服务器）；
@@ -17,12 +17,15 @@ import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { MAX_UPLOAD_BYTES } from "@/lib/constants";
 
-/** 允许的视频扩展名与 MIME（与后端 EXT_BY_TYPE 保持一致） */
+/** 允许的媒体扩展名与 MIME（视频 + 纯音频，与后端 EXT_BY_TYPE 保持一致） */
 const ACCEPT_TYPES: Record<string, string> = {
   ".mp4": "video/mp4",
   ".mov": "video/quicktime",
   ".mkv": "video/x-matroska",
   ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
 };
 
 /** 分片并发数（太大易触发浏览器同域连接上限，3 是稳妥值） */
@@ -329,7 +332,7 @@ export default function NewProjectPage() {
 
         <h1 className="mt-4 text-2xl font-bold tracking-tight">新建项目</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          支持一次选择多个视频批量上传（mp4 / mov / mkv / webm，单个最大 500MB；分片上传，中断可续传）
+          支持一次选择多个视频/音频批量上传（mp4 / mov / mkv / webm / mp3 / m4a / wav，单个最大 500MB；分片上传，中断可续传）
         </p>
 
         {/* 拖放/点击选择区域 */}
@@ -345,7 +348,7 @@ export default function NewProjectPage() {
             ref={inputRef}
             type="file"
             multiple
-            accept="video/mp4,video/quicktime,video/x-matroska,video/webm"
+            accept="video/mp4,video/quicktime,video/x-matroska,video/webm,audio/mpeg,audio/mp4,audio/wav"
             className="hidden"
             onChange={(e) => {
               if (e.target.files?.length) addFiles(e.target.files);
@@ -354,8 +357,10 @@ export default function NewProjectPage() {
             disabled={uploading}
           />
           <div className="text-4xl">📹</div>
-          <p className="mt-3 font-medium">点击选择 或 拖拽视频到这里（可多选）</p>
-          <p className="mt-1 text-sm text-neutral-500">mp4 / mov / mkv / webm · 单个 ≤ 500MB · 每批 ≤ {MAX_BATCH_FILES} 个</p>
+          <p className="mt-3 font-medium">点击选择 或 拖拽视频/音频到这里（可多选）</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            视频 mp4 / mov / mkv / webm · 音频 mp3 / m4a / wav · 单个 ≤ 500MB · 每批 ≤ {MAX_BATCH_FILES} 个
+          </p>
         </label>
 
         {/* 文件列表 */}
@@ -414,7 +419,7 @@ export default function NewProjectPage() {
           {uploading
             ? `上传中（${doneCount}/${rows.length}）…`
             : rows.length > 1
-              ? `批量上传 ${rows.length} 个视频`
+              ? `批量上传 ${rows.length} 个文件`
               : "开始上传并转写"}
         </button>
 

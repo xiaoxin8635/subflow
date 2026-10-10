@@ -49,6 +49,10 @@ export async function POST(
   if (project.status !== "READY" || !project.transcript || project.durationSec == null) {
     return NextResponse.json({ error: "项目未就绪或没有转写结果" }, { status: 400 });
   }
+  // 纯音频项目无画面可烧录：只提供字幕文件下载（前端同步隐藏成片导出入口）
+  if (project.mediaKind === "audio") {
+    return NextResponse.json({ error: "音频项目不支持烧录成片，请使用字幕文件下载（SRT/VTT/ASS）" }, { status: 400 });
+  }
 
   // 样式须存在
   const style = await db.style.findUnique({ where: { id: styleId } });

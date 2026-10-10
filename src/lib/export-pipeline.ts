@@ -105,9 +105,12 @@ export async function processExport(taskId: string): Promise<void> {
   const outAbsPath = path.join(exportsAbsDir(), `${taskId}.mp4`);
 
   try {
-    // ① 前置校验：项目须 READY 且有转写结果与时长
+    // ① 前置校验：项目须 READY 且有转写结果与时长；纯音频项目不可烧录
     if (project.status !== "READY" || !project.transcript || project.durationSec == null) {
       throw new Error("项目未就绪（须转写完成且有时长）");
+    }
+    if (project.mediaKind === "audio") {
+      throw new Error("音频项目不支持烧录成片（仅字幕文件下载）");
     }
     const segments = Array.isArray(project.transcript.segments)
       ? (project.transcript.segments as StoredSegment[])

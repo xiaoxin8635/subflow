@@ -14,21 +14,27 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import fs from "node:fs";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { MAX_UPLOAD_BYTES, ALLOWED_VIDEO_TYPES } from "@/lib/constants";
+import { MAX_UPLOAD_BYTES, mediaKindOf } from "@/lib/constants";
 import { ensureUploadDir, generateVideoKey, localVideoPath, isOss } from "@/lib/storage";
 import { startProcessing } from "@/lib/pipeline";
 import { rateLimit } from "@/lib/rate-limit";
-import { isValidVideoMagic } from "@/lib/upload-session";
+import { isValidMediaMagic } from "@/lib/upload-session";
 
 /** 每用户新建项目频率上限（个/小时），防刷上传占磁盘与 ASR 费用 */
 const UPLOAD_HOURLY_LIMIT = 10;
 
-/** MIME → 扩展名映射（白名单内） */
+/** MIME → 扩展名映射（白名单内，视频 + 纯音频） */
 const EXT_BY_TYPE: Record<string, string> = {
   "video/mp4": ".mp4",
   "video/quicktime": ".mov",
   "video/x-matroska": ".mkv",
   "video/webm": ".webm",
+  "audio/mpeg": ".mp3",
+  "audio/mp3": ".mp3",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
 };
 
 /** 限流 Transform：累计字节数超上限抛 FILE_TOO_LARGE；首块顺带校验文件魔数 */
@@ -42,11 +48,11 @@ class SizeLimitStream extends Transform {
     _encoding: BufferEncoding,
     callback: (err: Error | null, data?: Buffer) => void,
   ): void {
-    // 首块校验魔数：非视频内容立即中断（防改后缀上传任意文件）
+    // 首块校验魔数：非白名单媒体内容立即中断（防改后缀上传任意文件）
     if (!this.checkedMagic) {
       this.checkedMagic = true;
-      if (!isValidVideoMagic(chunk)) {
-        callback(new Error("NOT_VIDEO"));
+      if (!isValidMediaMagic(chunk)) {
+        callback(new Error("NOT_MEDIA"));
         return;
       }
     }
@@ -89,12 +95,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  // 校验文件类型（白名单）
+  // 校验文件类型（MIME 白名单：视频 + 纯音频），并确定媒体类型
   const contentType = request.headers.get("content-type") ?? "";
+  const kind = mediaKindOf(contentType);
   const ext = EXT_BY_TYPE[contentType];
-  if (!ext || !(ALLOWED_VIDEO_TYPES as readonly string[]).includes(contentType)) {
+  if (!kind || !ext) {
     return NextResponse.json(
-      { error: `不支持的视频格式：${contentType || "未知"}（仅支持 mp4/mov/mkv/webm）` },
+      { error: `不支持的媒体格式：${contentType || "未知"}（支持 mp4/mov/mkv/webm/mp3/m4a/wav）` },
       { status: 415 },
     );
   }
@@ -113,7 +120,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // 先建项目行（拿到 id），流式写盘；失败则回滚删除
   const project = await db.project.create({
-    data: { userId: user.id, title, videoKey, videoName: rawName, status: "UPLOADED" },
+    data: { userId: user.id, title, mediaKind: kind, videoKey, videoName: rawName, status: "UPLOADED" },
   });
 
   try {
@@ -132,8 +139,8 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 413 },
       );
     }
-    if (err instanceof Error && err.message === "NOT_VIDEO") {
-      return NextResponse.json({ error: "文件内容不是有效的视频格式" }, { status: 415 });
+    if (err instanceof Error && err.message === "NOT_MEDIA") {
+      return NextResponse.json({ error: "文件内容不是有效的视频/音频格式" }, { status: 415 });
     }
     console.error("[upload] 写盘失败：", err);
     return NextResponse.json({ error: "上传失败，请重试" }, { status: 500 });

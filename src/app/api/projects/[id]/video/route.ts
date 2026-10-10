@@ -20,12 +20,15 @@ const CHUNK_SIZE = 4 * 1024 * 1024;
 /** oss 签名 URL 有效期（秒）：4 小时，覆盖单次观看会话 */
 const VIDEO_URL_TTL_SEC = 4 * 60 * 60;
 
-/** 扩展名 → MIME（与上传白名单一致） */
+/** 扩展名 → MIME（与上传白名单一致，含纯音频） */
 const MIME_BY_EXT: Record<string, string> = {
   ".mp4": "video/mp4",
   ".mov": "video/quicktime",
   ".mkv": "video/x-matroska",
   ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
 };
 
 /**

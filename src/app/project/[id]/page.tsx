@@ -48,6 +48,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             id: project.id,
             title: project.title,
             status: project.status,
+            mediaKind: project.mediaKind === "audio" ? "audio" : "video",
             durationSec: project.durationSec,
             error: project.error,
             queuePosition:

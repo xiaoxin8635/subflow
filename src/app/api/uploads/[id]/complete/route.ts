@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { mediaKindOf } from "@/lib/constants";
 import { completeAndMerge, getMeta, isValidUploadId, UploadSessionError } from "@/lib/upload-session";
 import { startProcessing } from "@/lib/pipeline";
 
@@ -42,7 +43,15 @@ export async function POST(
     const title = meta.fileName.replace(/[\\/:*?"<>|]/g, "_").slice(0, 100) || "未命名视频";
 
     const project = await db.project.create({
-      data: { userId: user.id, title, videoKey, videoName: meta.fileName, status: "UPLOADED" },
+      data: {
+        userId: user.id,
+        title,
+        // init 时已过 MIME 白名单，这里按 MIME 定媒体类型（决定导出形态）
+        mediaKind: mediaKindOf(meta.contentType) === "audio" ? "audio" : "video",
+        videoKey,
+        videoName: meta.fileName,
+        status: "UPLOADED",
+      },
     });
 
     // 异步启动转写流水线（与整传一致：fire-and-forget）

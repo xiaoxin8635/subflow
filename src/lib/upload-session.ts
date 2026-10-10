@@ -271,16 +271,26 @@ export async function writeChunk(
 }
 
 /**
- * 校验视频文件魔数（文件头签名），防止改后缀上传任意文件
+ * 校验媒体文件魔数（文件头签名），防止改后缀上传任意文件
  * @param head 文件前若干字节（至少 12 字节）
- * @returns 是否为白名单内的视频格式（mp4/mov：ftyp；mkv/webm：EBML 头）
+ * @returns 是否为白名单内的媒体格式：
+ *          视频 mp4/mov/m4a：ftyp；mkv/webm：EBML 头；
+ *          音频 mp3：ID3 标签或 MPEG frame sync（0xFF Ex）；wav：RIFF/WAVE
  */
-export function isValidVideoMagic(head: Buffer): boolean {
+export function isValidMediaMagic(head: Buffer): boolean {
   if (head.length < 12) return false;
-  // mp4 / mov：偏移 4 起为 "ftyp"
+  // mp4 / mov / m4a（ISO BMFF 家族）：偏移 4 起为 "ftyp"
   if (head.subarray(4, 8).toString("latin1") === "ftyp") return true;
   // mkv / webm：EBML 头 1A 45 DF A3
   if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return true;
+  // mp3（带 ID3v2 标签）："ID3"
+  if (head.subarray(0, 3).toString("latin1") === "ID3") return true;
+  // mp3（裸 MPEG 音频帧）：frame sync 11111111 111xxxxx
+  if (head[0] === 0xff && (head[1] & 0xe0) === 0xe0) return true;
+  // wav：RIFF 容器且偏移 8 起为 "WAVE"
+  if (head.subarray(0, 4).toString("latin1") === "RIFF" && head.subarray(8, 12).toString("latin1") === "WAVE") {
+    return true;
+  }
   return false;
 }
 
@@ -331,12 +341,12 @@ async function completeOss(uploadId: string, meta: UploadMeta): Promise<string> 
     throw new UploadSessionError(400, `合并后大小不符（期望 ${meta.size}，实际 ${merged}），请重新上传`);
   }
 
-  // 魔数复查：整体内容必须确实是白名单视频格式
+  // 魔数复查：整体内容必须确实是白名单媒体格式
   const head = await ossGetRange(objectKey, 0, 15);
-  if (!isValidVideoMagic(head)) {
+  if (!isValidMediaMagic(head)) {
     await ossDelete(objectKey).catch(() => {});
     await cleanupSession(uploadId);
-    throw new UploadSessionError(415, "文件内容不是有效的视频格式");
+    throw new UploadSessionError(415, "文件内容不是有效的视频/音频格式");
   }
 
   await cleanupSession(uploadId);
@@ -387,7 +397,7 @@ async function completeLocal(uploadId: string, meta: UploadMeta): Promise<string
     throw new UploadSessionError(400, `合并后大小不符（期望 ${meta.size}，实际 ${merged}），请重新上传`);
   }
 
-  // 魔数复查：整体内容必须确实是白名单视频格式（分片可被逐片伪造，合并后统一校验文件头）
+  // 魔数复查：整体内容必须确实是白名单媒体格式（分片可被逐片伪造，合并后统一校验文件头）
   const head = Buffer.alloc(12);
   const fd = fs.openSync(destPath, "r");
   try {
@@ -395,10 +405,10 @@ async function completeLocal(uploadId: string, meta: UploadMeta): Promise<string
   } finally {
     fs.closeSync(fd);
   }
-  if (!isValidVideoMagic(head)) {
+  if (!isValidMediaMagic(head)) {
     await fs.promises.unlink(destPath).catch(() => {});
     await cleanupSession(uploadId);
-    throw new UploadSessionError(415, "文件内容不是有效的视频格式");
+    throw new UploadSessionError(415, "文件内容不是有效的视频/音频格式");
   }
 
   await cleanupSession(uploadId);

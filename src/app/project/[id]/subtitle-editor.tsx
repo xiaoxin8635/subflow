@@ -41,18 +41,21 @@ function fmt(t: number): string {
  * @param projectId       项目 ID（视频流/保存接口地址）
  * @param projectTitle    项目标题（导出系统通知文案用）
  * @param initialSegments 服务端首屏字幕分段
- * @param durationSec     视频时长（秒），用于导出扣费展示
+ * @param durationSec     媒体时长（秒），用于导出扣费展示
+ * @param mediaKind       媒体类型（audio 时导出卡隐藏成片烧录入口）
  */
 export function SubtitleEditor({
   projectId,
   projectTitle,
   initialSegments,
   durationSec,
+  mediaKind = "video",
 }: {
   projectId: string;
   projectTitle?: string;
   initialSegments: EditorSegment[];
   durationSec: number;
+  mediaKind?: "video" | "audio";
 }) {
   const [segments, setSegments] = useState<EditorSegment[]>(initialSegments);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -216,7 +219,7 @@ export function SubtitleEditor({
           <p className="mt-2 text-xs text-neutral-400">切换后立即在左侧预览，导出时将按所选样式烧录</p>
         </div>
 
-        {/* 导出卡片（按当前样式烧录，完成后可下载） */}
+        {/* 导出卡片（按当前样式烧录，完成后可下载；音频项目仅字幕下载） */}
         <ExportCard
           projectId={projectId}
           projectTitle={projectTitle}
@@ -224,6 +227,7 @@ export function SubtitleEditor({
           styleId={activeStyleId}
           styleName={styles.find((s) => s.id === activeStyleId)?.name ?? null}
           dirty={dirty}
+          mediaKind={mediaKind}
         />
       </div>
 

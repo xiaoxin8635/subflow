@@ -46,7 +46,7 @@ export async function probeDurationSec(filePath: string): Promise<number> {
   const duration = JSON.parse(stdout).format?.duration;
   const sec = Number(duration);
   if (!Number.isFinite(sec) || sec <= 0) {
-    throw new Error("无法解析媒体时长（文件可能损坏或不是有效的视频）");
+    throw new Error("无法解析媒体时长（文件可能损坏或不是有效的视频/音频）");
   }
   return sec;
 }

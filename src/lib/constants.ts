@@ -24,6 +24,30 @@ export const ALLOWED_VIDEO_TYPES = [
   "video/webm",
 ] as const;
 
+/** 支持的纯音频格式（MIME 白名单，P2.1 音频直传：播客/课程转字幕） */
+export const ALLOWED_AUDIO_TYPES = [
+  "audio/mpeg", // .mp3（Chrome/Edge/Firefox）
+  "audio/mp3", // .mp3（部分环境）
+  "audio/mp4", // .m4a（Chrome/Edge：AAC 封装于 ISO BMFF）
+  "audio/x-m4a", // .m4a（Safari/部分环境）
+  "audio/wav", // .wav
+  "audio/x-wav", // .wav（部分环境）
+] as const;
+
+/** 媒体类型（决定导出形态：video 可烧录成片，audio 仅字幕文件下载） */
+export type MediaKind = "video" | "audio";
+
+/**
+ * 由 MIME 判定媒体类型（上传白名单的唯一判定入口）
+ * @param contentType 客户端声明的 MIME
+ * @returns video / audio；不在白名单时返回 null
+ */
+export function mediaKindOf(contentType: string): MediaKind | null {
+  if ((ALLOWED_VIDEO_TYPES as readonly string[]).includes(contentType)) return "video";
+  if ((ALLOWED_AUDIO_TYPES as readonly string[]).includes(contentType)) return "audio";
+  return null;
+}
+
 /** 大陆手机号格式（前后端共用同一正则，保证校验一致） */
 export const PHONE_RE = /^1[3-9]\d{9}$/;
 

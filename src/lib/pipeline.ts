@@ -68,7 +68,7 @@ export async function processProject(projectId: string): Promise<void> {
     const videoPath = await ensureLocalVideo(project.videoKey);
     const durationSec = await probeDurationSec(videoPath);
     if (durationSec > MAX_VIDEO_DURATION_SEC) {
-      throw new Error(`视频时长 ${Math.round(durationSec / 60)} 分钟，超过上限 ${MAX_VIDEO_DURATION_SEC / 60} 分钟`);
+      throw new Error(`媒体时长 ${Math.round(durationSec / 60)} 分钟，超过上限 ${MAX_VIDEO_DURATION_SEC / 60} 分钟`);
     }
     await db.project.update({ where: { id: projectId }, data: { durationSec } });
 

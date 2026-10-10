@@ -21,6 +21,8 @@ export interface ProjectDetail {
   id: string;
   title: string;
   status: ProjectStatus;
+  /** 媒体类型：video（可烧录成片）/ audio（仅字幕文件下载） */
+  mediaKind?: "video" | "audio";
   durationSec: number | null;
   error: string | null;
   /** UPLOADED（排队中）时的转写队列位置（1 起；null = 队列信息不可用/已在处理） */
@@ -187,6 +189,7 @@ export function ProjectLiveView({
             projectTitle={project.title}
             initialSegments={segments}
             durationSec={project.durationSec ?? 0}
+            mediaKind={project.mediaKind ?? "video"}
           />
         ))}
     </div>

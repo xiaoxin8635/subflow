@@ -46,10 +46,11 @@ type ExportPhase = "idle" | "submitting" | "processing" | "done" | "failed";
  * 导出卡片组件
  * @param props.projectId    项目 ID
  * @param props.projectTitle 项目标题（系统通知文案用）
- * @param props.durationSec  视频时长（秒），用于预计扣费展示
+ * @param props.durationSec  媒体时长（秒），用于预计扣费展示
  * @param props.styleId      当前选中样式 ID（导出按此样式烧录）
  * @param props.styleName    当前选中样式名称（展示用）
  * @param props.dirty        字幕是否有未保存修改（true 时禁止导出）
+ * @param props.mediaKind    媒体类型（audio 时隐藏成片烧录入口，仅保留字幕文件下载）
  */
 export function ExportCard({
   projectId,
@@ -58,6 +59,7 @@ export function ExportCard({
   styleId,
   styleName,
   dirty,
+  mediaKind = "video",
 }: {
   projectId: string;
   projectTitle?: string;
@@ -65,6 +67,7 @@ export function ExportCard({
   styleId: string | null;
   styleName: string | null;
   dirty: boolean;
+  mediaKind?: "video" | "audio";
 }) {
   const [phase, setPhase] = useState<ExportPhase>("idle");
   const [balance, setBalance] = useState<number | null>(null);
@@ -183,6 +186,15 @@ export function ExportCard({
 
   return (
     <div className="mt-4 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+      {mediaKind === "audio" ? (
+        /* 纯音频项目：无画面可烧录，仅字幕文件下载 */
+        <div>
+          <p className="text-sm font-medium">音频项目</p>
+          <p className="mt-0.5 text-xs text-neutral-400">
+            纯音频不支持烧录成片，可直接下载字幕文件（SRT / VTT / ASS，不消耗额度）
+          </p>
+        </div>
+      ) : (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">导出成片</p>
@@ -218,6 +230,7 @@ export function ExportCard({
           </button>
         )}
       </div>
+      )}
 
       {/* 字幕文件下载（纯文本生成不扣额度；读取库内数据，未保存修改时同样禁用） */}
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">

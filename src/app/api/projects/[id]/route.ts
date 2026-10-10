@@ -44,6 +44,7 @@ export async function GET(
       id: project.id,
       title: project.title,
       status: project.status,
+      mediaKind: project.mediaKind,
       durationSec: project.durationSec,
       error: project.error,
       videoName: project.videoName,
