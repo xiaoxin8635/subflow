@@ -1,14 +1,21 @@
 /**
  * @file /api/exports/[id]/download — 下载导出成品
- * @description GET：仅 DONE 任务可下载；流式输出 mp4，Content-Disposition
- *              使用 RFC 5987 filename* 编码中文文件名（原视频名_字幕.mp4）。
+ * @description GET：仅 DONE 任务可下载。
+ *              local 模式：流式输出 mp4，Content-Disposition 使用 RFC 5987 filename*
+ *              编码中文文件名（原视频名_字幕.mp4）。
+ *              oss   模式：302 跳转到签名 URL（10 分钟有效，response-content-disposition
+ *              由 OSS 侧返回 attachment，下载流量直达 OSS 不经服务器）。
  */
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import { Readable } from "node:stream";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { exportAbsPath } from "@/lib/export-pipeline";
+import { exportAbsPath, isOss } from "@/lib/storage";
+import { presignGetUrl } from "@/lib/oss";
+
+/** oss 签名 URL 有效期（秒）：10 分钟，足够浏览器发起下载 */
+const DOWNLOAD_URL_TTL_SEC = 10 * 60;
 
 /**
  * 下载导出成品
@@ -34,6 +41,22 @@ export async function GET(
     return NextResponse.json({ error: "导出尚未完成，无法下载" }, { status: 409 });
   }
 
+  // 下载文件名：原视频名去扩展名 + "_字幕.mp4"（无原名时退回项目标题）
+  const baseName = (task.project.videoName ?? task.project.title).replace(/\.[^.]+$/, "");
+  const fileName = `${baseName || "video"}_字幕.mp4`;
+  const encoded = encodeURIComponent(fileName);
+
+  // oss 模式：授权后 302 到签名 URL，下载流量直达 OSS
+  if (isOss()) {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: presignGetUrl(task.outputKey, DOWNLOAD_URL_TTL_SEC, "attachment", fileName),
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }
+
   const absPath = exportAbsPath(task.outputKey);
   let stat: fs.Stats;
   try {
@@ -41,11 +64,6 @@ export async function GET(
   } catch {
     return NextResponse.json({ error: "导出文件已丢失，请重新导出" }, { status: 410 });
   }
-
-  // 下载文件名：原视频名去扩展名 + "_字幕.mp4"（无原名时退回项目标题）
-  const baseName = (task.project.videoName ?? task.project.title).replace(/\.[^.]+$/, "");
-  const fileName = `${baseName || "video"}_字幕.mp4`;
-  const encoded = encodeURIComponent(fileName);
 
   const stream = Readable.toWeb(fs.createReadStream(absPath)) as ReadableStream;
   return new Response(stream, {

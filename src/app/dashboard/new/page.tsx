@@ -3,9 +3,12 @@
  * @file 新建项目页（视频分片上传）
  * @description 客户端组件：选择文件 → 前端预校验（类型/大小）→ 分片上传：
  *   ① POST /api/uploads/init 创建会话（或凭 sessionStorage 中的 uploadId 断点续传）
- *   ② 3 片并发 PUT /api/uploads/[id]/chunks/[index]（每片失败自动重试 2 次）
+ *   ② 3 片并发上传分片（每片失败自动重试 2 次）：
+ *      local 模式 → PUT /api/uploads/[id]/chunks/[index]（经服务器）；
+ *      oss   模式 → 直接 PUT init/status 返回的 partUrls[index]（浏览器直传 OSS）。
  *   ③ POST /api/uploads/[id]/complete 合并入库 → 跳转项目页开始转写
- * 上传中刷新页面后重新选择同一文件，会自动查询已传分片并跳过（断点续传）。
+ * 上传中刷新页面后重新选择同一文件，会自动查询已传分片并跳过（断点续传；
+ * oss 模式的直传签名 URL 过期后由 status 接口重发）。
  */
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -32,13 +35,19 @@ interface InitBody {
   uploadId: string;
   chunkSize: number;
   chunkCount: number;
+  /** 存储驱动：local 走服务器分片；oss 走浏览器直传 */
+  mode: "local" | "oss";
+  /** oss 模式：各分片直传 PUT 签名 URL（index 与 0 起分片索引对应） */
+  partUrls?: string[];
 }
 
 /** resume 接口响应 */
 interface ResumeBody {
   chunkSize: number;
   chunkCount: number;
+  mode: "local" | "oss";
   uploadedIndexes: number[];
+  partUrls?: string[];
 }
 
 /** 分片上传的会话状态（运行期保存在 ref 中） */
@@ -48,6 +57,8 @@ interface UploadRun {
   chunkCount: number;
   /** 已确认到齐的分片索引集合 */
   received: Set<number>;
+  /** oss 模式：各分片直传 PUT 签名 URL */
+  partUrls?: string[];
 }
 
 /** 字节数格式化为可读大小 */
@@ -87,23 +98,27 @@ export default function NewProjectPage() {
   }
 
   /**
-   * 上传单个分片（带重试）
+   * 上传单个分片（带重试）：oss 模式直传签名 URL，local 模式走服务器分片接口
    * @param run   会话状态
-   * @param index 分片索引
+   * @param index 分片索引（0 起）
    * @param signal 取消信号
    */
   async function uploadChunk(run: UploadRun, index: number, signal: AbortSignal): Promise<void> {
     const start = index * run.chunkSize;
     const blob = file!.slice(start, Math.min(start + run.chunkSize, file!.size));
+    // oss 直传目标 URL；local 模式为 undefined 走服务器接口
+    const ossUrl = run.partUrls?.[index];
     for (let attempt = 0; attempt <= CHUNK_RETRIES; attempt++) {
       if (signal.aborted) throw new Error("ABORTED");
       try {
-        const res = await fetch(`/api/uploads/${run.uploadId}/chunks/${index}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: blob,
-          signal,
-        });
+        const res = ossUrl
+          ? await fetch(ossUrl, { method: "PUT", body: blob, signal })
+          : await fetch(`/api/uploads/${run.uploadId}/chunks/${index}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/octet-stream" },
+              body: blob,
+              signal,
+            });
         if (res.ok) {
           run.received.add(index);
           setProgress(Math.round((run.received.size / run.chunkCount) * 100));
@@ -156,6 +171,7 @@ export default function NewProjectPage() {
             chunkSize: body.chunkSize,
             chunkCount: body.chunkCount,
             received: new Set(body.uploadedIndexes),
+            partUrls: body.partUrls,
           };
           setResumed(body.uploadedIndexes.length > 0);
           setProgress(Math.round((body.uploadedIndexes.length / body.chunkCount) * 100));
@@ -181,6 +197,7 @@ export default function NewProjectPage() {
           chunkSize: body.chunkSize,
           chunkCount: body.chunkCount,
           received: new Set<number>(),
+          partUrls: body.partUrls,
         };
       }
       sessionStorage.setItem(sessionKey(file), run.uploadId);

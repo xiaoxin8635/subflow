@@ -2,8 +2,10 @@
  * @file 导出流水线（FFmpeg 烧录字幕 + 额度扣减；Redis 队列驱动，Worker 消费）
  * @description ExportTask 状态机：PENDING → PROCESSING → DONE / FAILED。
  *              流程：样式契约 + 字幕分段编译为 ASS 文件（写入 uploads/exports/），
- *              FFmpeg `ass` 滤镜烧录（libx264 重编码视频、音频直拷），成功后在
- *              单个事务内完成任务置 DONE + 扣减额度 + 写额度流水。
+ *              FFmpeg `ass` 滤镜烧录（libx264 重编码视频、音频直拷）。存储驱动：
+ *              local 成片留在 uploads/exports/；oss 先经 ensureLocalVideo 拉取源视频、
+ *              烧录完成后将成片上传 OSS 并清理本地临时文件。
+ *              成功后在单个事务内完成任务置 DONE + 扣减额度 + 写额度流水。
  *              入口 startExport 仅负责入队（BullMQ 导出队列）；Redis 不可用时降级
  *              进程内直跑。processExport 只执行不兜错——错误上抛给 Worker 触发
  *              自动重试，重试用尽后由 failed 事件调用 markExportFailed 落库。
@@ -19,6 +21,8 @@ import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
 import { buildAss } from "@/lib/ass";
 import { enqueueExport } from "@/lib/queue/queues";
+import { ensureLocalVideo, isOss, removeLocalVideoCache } from "@/lib/storage";
+import { ossUploadFile } from "@/lib/oss";
 import type { StoredSegment } from "@/lib/asr/types";
 
 /** 导出产物目录（与上传目录同级：uploads/exports/） */
@@ -102,6 +106,9 @@ export async function processExport(taskId: string): Promise<void> {
     await db.exportTask.update({ where: { id: taskId }, data: { status: "PROCESSING" } });
     await ensureExportsDir();
 
+    // ①' 源视频本地路径（oss 模式先拉取到本地缓存，失败即抛错交由重试）
+    const inputAbsPath = await ensureLocalVideo(project.videoKey!);
+
     // ② 生成 ASS 文件（样式缺失时用「白字黑边、底部」兜底配置，保证仍可导出）
     const fallbackConfig: Parameters<typeof buildAss>[0] = {
       fontFamily: "Noto Sans SC",
@@ -131,7 +138,7 @@ export async function processExport(taskId: string): Promise<void> {
         ffmpegPath,
         [
           "-y",
-          "-i", path.join(/* turbopackIgnore: true */ process.cwd(), UPLOAD_DIR, project.videoKey!),
+          "-i", inputAbsPath,
           "-vf", `ass=${assFilterPath}`,
           "-c:v", "libx264",
           "-preset", "veryfast",
@@ -153,6 +160,11 @@ export async function processExport(taskId: string): Promise<void> {
         else reject(new Error(`FFmpeg 退出码 ${code}：${stderr.slice(-STDERR_TAIL)}`));
       });
     });
+
+    // ③' oss 模式：成片上传 OSS（必须在扣费事务前——上传失败则整体重试，不产生扣费）
+    if (isOss()) {
+      await ossUploadFile(`${EXPORTS_SUBDIR}/${taskId}.mp4`, outAbsPath, "video/mp4");
+    }
 
     // ④ 事务：任务 DONE + 扣额度（带余额守卫防负数）+ 额度流水
     const costSeconds = Math.ceil(project.durationSec);
@@ -182,6 +194,11 @@ export async function processExport(taskId: string): Promise<void> {
       });
     });
     console.log(`[export] 任务 ${taskId} 完成：${project.title}，扣费 ${costSeconds} 秒`);
+    // ⑤ oss 模式：事务成功后清理本地成片与源视频缓存副本（源视频保留在 OSS 供预览/再导出）
+    if (isOss()) {
+      await fs.unlink(outAbsPath).catch(() => {});
+      await removeLocalVideoCache(project.videoKey!).catch(() => {});
+    }
   } catch (err) {
     // 失败时清理半成品输出（可能是不完整文件），错误上抛交由调用方重试/落 FAILED
     await fs.unlink(outAbsPath).catch(() => {});
@@ -190,12 +207,4 @@ export async function processExport(taskId: string): Promise<void> {
     // ASS 文件是中间产物，无论成败都清理
     await fs.unlink(assAbsPath).catch(() => {});
   }
-}
-
-/**
- * 由导出任务 outputKey 解析产物磁盘绝对路径（下载 API 使用）
- * @param outputKey 导出产物 key（exports/{taskId}.mp4）
- */
-export function exportAbsPath(outputKey: string): string {
-  return path.join(/* turbopackIgnore: true */ process.cwd(), UPLOAD_DIR, outputKey);
 }

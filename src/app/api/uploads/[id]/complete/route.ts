@@ -1,7 +1,8 @@
 /**
  * @file POST /api/uploads/[id]/complete — 完成分片上传并创建项目
- * @description 校验分片齐全 → 合并 + 魔数/大小复查 → 建项目行 → 异步启动转写流水线。
- *              余额预检与整传 POST /api/projects 保持一致；失败不残留半截文件。
+ * @description 校验分片齐全 → 合并/提交（local 合并文件；oss 提交 Multipart）→
+ *              魔数/大小复查 → 建项目行 → 异步启动转写流水线。
+ *              余额预检与整传 POST /api/projects 保持一致；失败不残留半截对象。
  */
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";

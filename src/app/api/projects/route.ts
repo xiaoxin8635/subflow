@@ -1,9 +1,10 @@
 /**
  * @file /api/projects — 项目集合接口
  * @description
- *   POST：新建项目（视频上传）。客户端以「原始文件二进制」作为请求体流式上传，
+ *   POST：新建项目（视频整传上传）。客户端以「原始文件二进制」作为请求体流式上传，
  *         元数据放请求头（Content-Type=视频 MIME，X-File-Name=URI 编码的原始文件名），
  *         避免 multipart 将 500MB 文件整体缓冲进内存。边收边写磁盘，超限即中断并清理。
+ *         注意：STORAGE_DRIVER=oss 时本端点禁用（视频应走浏览器直传的分片会话接口）。
  *   GET：当前用户的项目列表（按更新时间倒序，最多 100 条）。
  */
 import { NextResponse } from "next/server";
@@ -14,7 +15,7 @@ import fs from "node:fs";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { MAX_UPLOAD_BYTES, ALLOWED_VIDEO_TYPES } from "@/lib/constants";
-import { ensureUploadDir, generateVideoKey, localVideoPath } from "@/lib/storage";
+import { ensureUploadDir, generateVideoKey, localVideoPath, isOss } from "@/lib/storage";
 import { startProcessing } from "@/lib/pipeline";
 import { rateLimit } from "@/lib/rate-limit";
 import { isValidVideoMagic } from "@/lib/upload-session";
@@ -78,6 +79,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   // 余额预检：额度耗尽的用户不允许新建（提示先兑换额度）
   if (user.balanceSeconds <= 0) {
     return NextResponse.json({ error: "剩余额度不足，请先兑换或购买额度" }, { status: 402 });
+  }
+
+  // OSS 模式：整传会占用服务器带宽，禁用并引导走分片会话直传接口
+  if (isOss()) {
+    return NextResponse.json(
+      { error: "当前为直传模式，请使用分片上传接口（POST /api/uploads/init）" },
+      { status: 409 },
+    );
   }
 
   // 校验文件类型（白名单）

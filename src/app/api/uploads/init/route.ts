@@ -1,6 +1,8 @@
 /**
  * @file POST /api/uploads/init — 创建分片上传会话
- * @description 客户端先调本接口拿到 uploadId 与分片参数，再逐片 PUT 上传，
+ * @description 客户端先调本接口拿到 uploadId 与分片参数，再逐片上传：
+ *              local 模式 → PUT /api/uploads/[id]/chunks/[index] 走服务器；
+ *              oss   模式 → 使用返回的 partUrls 浏览器直传 OSS（不经服务器带宽）。
  *              全部完成后 POST /api/uploads/[id]/complete 合并入库。
  *              限流复用新建项目配额（每用户每小时 10 个），防止绕过整传限流。
  */
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const session = initSession(user.id, fileName, contentType, size);
+    const session = await initSession(user.id, fileName, contentType, size);
     return NextResponse.json(session);
   } catch (e) {
     if (e instanceof UploadSessionError) {

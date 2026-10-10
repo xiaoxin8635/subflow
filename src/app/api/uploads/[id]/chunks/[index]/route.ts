@@ -1,7 +1,8 @@
 /**
- * @file PUT /api/uploads/[id]/chunks/[index] — 上传单个分片
+ * @file PUT /api/uploads/[id]/chunks/[index] — 上传单个分片（local 模式）
  * @description 请求体为该片的原始二进制（Content-Type: application/octet-stream）。
  *              覆盖写幂等：同一片重复上传以最后一次为准；写入时校验片大小不超预期。
+ *              oss 模式下本接口不可用（会话为直传模式，分片走 init 返回的签名 URL）。
  */
 import { NextResponse } from "next/server";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
@@ -46,7 +47,7 @@ export async function PUT(
       index,
       request.body as WebReadableStream<Uint8Array>,
     );
-    const received = listReceivedChunks(id, meta);
+    const received = await listReceivedChunks(id, meta);
     return NextResponse.json({
       ok: true,
       index,

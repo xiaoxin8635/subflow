@@ -1,8 +1,13 @@
 /**
- * @file 分片上传会话管理（本地磁盘实现）
- * @description 分片暂存于 uploads/tmp/{uploadId}/（meta.json + chunk_N），
- *              complete 时按序合并为正式视频文件（uploads/{videoKey}）并清理暂存目录。
- *              支持断点续传：已到片按「文件存在且大小符合预期」判定，客户端可查询后跳过重传。
+ * @file 分片上传会话管理（local / oss 双驱动）
+ * @description 会话元信息统一落盘 uploads/tmp/{uploadId}/meta.json（含驱动标记）。
+ *              local 模式：分片暂存为 chunk_N，complete 时按序合并为 uploads/{videoKey}。
+ *              oss   模式：init 时调 OSS InitiateMultipartUpload 拿 uploadId 并为每个
+ *              分片签发直传 PUT URL（浏览器 → OSS，不经服务器带宽）；complete 时服务端
+ *              ListParts 核对分片齐全与大小 → CompleteMultipartUpload 合并对象 →
+ *              HeadObject 校验总大小 → Range 读文件头校验魔数 → 清理会话。
+ *              断点续传：已到片按「local 文件存在且大小符合 / oss ListParts 存在且大小
+ *              符合」判定，客户端查询后跳过重传；oss 预签名 URL 过期后由 status 接口重发。
  *              安全约束：uploadId 由服务端生成（UUID），index 必须为合法整数，
  *              会话绑定 userId，绝不将客户端输入直接拼进路径。
  */
@@ -13,7 +18,17 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { MAX_UPLOAD_BYTES, UPLOAD_CHUNK_SIZE } from "@/lib/constants";
-import { ensureUploadDir, generateVideoKey } from "@/lib/storage";
+import { ensureUploadDir, generateVideoKey, localPathByKey, isOss } from "@/lib/storage";
+import {
+  ossAbortMultipart,
+  ossCompleteMultipart,
+  ossDelete,
+  ossGetRange,
+  ossHead,
+  ossInitMultipart,
+  ossListParts,
+  presignPartPutUrl,
+} from "@/lib/oss";
 
 /** 上传目录（与 storage.ts 保持同一来源，可用 LOCAL_UPLOAD_DIR 覆盖） */
 const LOCAL_UPLOAD_DIR = process.env.LOCAL_UPLOAD_DIR ?? "./uploads";
@@ -30,10 +45,19 @@ interface UploadMeta {
   chunkSize: number;
   chunkCount: number;
   createdAt: number;
+  /** 存储驱动标记（创建会话时的快照，complete 按此走对应合并逻辑） */
+  driver: "local" | "oss";
+  /** oss 模式：OSS Multipart Upload 会话 ID */
+  ossUploadId?: string;
+  /** oss 模式：目标对象 key（= 最终 videoKey） */
+  objectKey?: string;
 }
 
 /** 会话有效期：创建后 24 小时未完成即视为孤儿，可被惰性清扫 */
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** oss 直传分片 PUT URL 有效期（秒）：12 小时，续传时由 status 接口重发新签名 */
+const PART_URL_TTL_SEC = 12 * 60 * 60;
 
 /** 合法 uploadId 格式（服务端生成的 UUID），任何拼路径前必须校验 */
 const UPLOAD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,9 +77,15 @@ function metaPath(uploadId: string): string {
   return path.join(sessionDir(uploadId), "meta.json");
 }
 
-/** 第 index 片的落盘路径 */
+/** 第 index 片的落盘路径（local 模式） */
 function chunkPath(uploadId: string, index: number): string {
   return path.join(sessionDir(uploadId), `chunk_${index}`);
+}
+
+/** 第 index 片（0 起）的期望字节数 */
+function expectedChunkSize(meta: UploadMeta, index: number): number {
+  const isLast = index === meta.chunkCount - 1;
+  return isLast ? meta.size - (meta.chunkCount - 1) * meta.chunkSize : meta.chunkSize;
 }
 
 /**
@@ -66,20 +96,30 @@ export function isValidUploadId(id: string): boolean {
   return UPLOAD_ID_RE.test(id);
 }
 
+/** 创建会话的返回体 */
+export interface InitSessionResult {
+  uploadId: string;
+  chunkSize: number;
+  chunkCount: number;
+  /** 存储驱动标记（客户端据此决定分片上传目标） */
+  mode: "local" | "oss";
+  /** oss 模式：每个分片（0 起索引对应 partUrls[index]）的直传 PUT 签名 URL */
+  partUrls?: string[];
+}
+
 /**
  * 创建上传会话
  * @param userId      会话归属用户
  * @param fileName    原始文件名（仅展示用）
  * @param contentType MIME（已由调用方白名单校验）
  * @param size        文件总字节数
- * @returns uploadId、每片大小、总片数
  */
-export function initSession(
+export async function initSession(
   userId: string,
   fileName: string,
   contentType: string,
   size: number,
-): { uploadId: string; chunkSize: number; chunkCount: number } {
+): Promise<InitSessionResult> {
   if (!Number.isInteger(size) || size <= 0 || size > MAX_UPLOAD_BYTES) {
     throw new UploadSessionError(400, "文件大小不合法");
   }
@@ -91,19 +131,32 @@ export function initSession(
   const uploadId = crypto.randomUUID();
   const chunkSize = UPLOAD_CHUNK_SIZE;
   const chunkCount = Math.ceil(size / chunkSize);
+
+  if (isOss()) {
+    // oss 直传：ext 必须来自白名单 MIME（调用方已校验），objectKey 即最终 videoKey
+    const ext = path.extname(fileName).toLowerCase() || ".mp4";
+    const objectKey = generateVideoKey(ext);
+    const ossUploadId = await ossInitMultipart(objectKey, contentType);
+    fs.mkdirSync(sessionDir(uploadId), { recursive: true });
+    const meta: UploadMeta = {
+      uploadId, userId, fileName, contentType, size, chunkSize, chunkCount,
+      createdAt: Date.now(), driver: "oss", ossUploadId, objectKey,
+    };
+    fs.writeFileSync(metaPath(uploadId), JSON.stringify(meta), "utf8");
+    const partUrls = Array.from({ length: chunkCount }, (_, i) =>
+      presignPartPutUrl(objectKey, ossUploadId, i + 1, PART_URL_TTL_SEC),
+    );
+    return { uploadId, chunkSize, chunkCount, mode: "oss", partUrls };
+  }
+
+  // local 模式：分片落盘暂存
   fs.mkdirSync(sessionDir(uploadId), { recursive: true });
   const meta: UploadMeta = {
-    uploadId,
-    userId,
-    fileName,
-    contentType,
-    size,
-    chunkSize,
-    chunkCount,
-    createdAt: Date.now(),
+    uploadId, userId, fileName, contentType, size, chunkSize, chunkCount,
+    createdAt: Date.now(), driver: "local",
   };
   fs.writeFileSync(metaPath(uploadId), JSON.stringify(meta), "utf8");
-  return { uploadId, chunkSize, chunkCount };
+  return { uploadId, chunkSize, chunkCount, mode: "local" };
 }
 
 /**
@@ -128,17 +181,28 @@ export function getMeta(uploadId: string, userId: string): UploadMeta {
 }
 
 /**
- * 查询已到齐的分片索引（断点续传依据）
- * 判定标准：文件存在且大小符合预期（最后一片 = size % chunkSize 或 chunkSize）
+ * 查询已到齐的分片索引（断点续传依据；0 起）
+ * local：文件存在且大小符合预期；oss：ListParts 分片存在且大小符合预期
  * @param uploadId 会话 ID
  * @param meta     会话元信息
  */
-export function listReceivedChunks(uploadId: string, meta: UploadMeta): number[] {
+export async function listReceivedChunks(uploadId: string, meta: UploadMeta): Promise<number[]> {
+  const expectedOf = (i: number): number => expectedChunkSize(meta, i);
+
+  if (meta.driver === "oss") {
+    const parts = await ossListParts(meta.objectKey!, meta.ossUploadId!);
+    const received: number[] = [];
+    for (const p of parts) {
+      const idx = p.partNumber - 1;
+      if (idx >= 0 && idx < meta.chunkCount && p.size === expectedOf(idx)) received.push(idx);
+    }
+    return received;
+  }
+
   const received: number[] = [];
   for (let i = 0; i < meta.chunkCount; i++) {
-    const expected = i === meta.chunkCount - 1 ? meta.size - (meta.chunkCount - 1) * meta.chunkSize : meta.chunkSize;
     try {
-      if (fs.statSync(chunkPath(uploadId, i)).size === expected) received.push(i);
+      if (fs.statSync(chunkPath(uploadId, i)).size === expectedOf(i)) received.push(i);
     } catch {
       // 分片不存在：跳过
     }
@@ -147,7 +211,17 @@ export function listReceivedChunks(uploadId: string, meta: UploadMeta): number[]
 }
 
 /**
- * 写入单个分片（覆盖写，天然幂等；超限分片拒绝）
+ * 为 oss 会话重发分片直传 URL（续传时签名可能已过期）
+ * @param meta 会话元信息
+ */
+export function refreshPartUrls(meta: UploadMeta): string[] {
+  return Array.from({ length: meta.chunkCount }, (_, i) =>
+    presignPartPutUrl(meta.objectKey!, meta.ossUploadId!, i + 1, PART_URL_TTL_SEC),
+  );
+}
+
+/**
+ * 写入单个分片（local 模式专用；覆盖写幂等，超限分片拒绝）
  * @param uploadId 会话 ID
  * @param meta     会话元信息
  * @param index    分片索引
@@ -160,11 +234,13 @@ export async function writeChunk(
   index: number,
   body: WebReadableStream<Uint8Array>,
 ): Promise<number> {
+  if (meta.driver === "oss") {
+    throw new UploadSessionError(400, "该会话为 OSS 直传模式，请使用 init 返回的直传地址上传分片");
+  }
   if (!Number.isInteger(index) || index < 0 || index >= meta.chunkCount) {
     throw new UploadSessionError(400, "分片索引不合法");
   }
-  const isLast = index === meta.chunkCount - 1;
-  const expected = isLast ? meta.size - (meta.chunkCount - 1) * meta.chunkSize : meta.chunkSize;
+  const expected = expectedChunkSize(meta, index);
 
   let written = 0;
   // 边收边写并计数：超出该片应有大小立即中断（防伪造超长分片）
@@ -209,13 +285,79 @@ export function isValidVideoMagic(head: Buffer): boolean {
 }
 
 /**
- * 校验分片齐全 → 按序合并为正式视频文件 → 清理暂存目录
+ * 放弃 oss 会话的 Multipart Upload（complete 校验失败时调用，清理已传分片）
+ * @param meta 会话元信息
+ */
+async function abortIfOss(meta: UploadMeta): Promise<void> {
+  if (meta.driver === "oss" && meta.objectKey && meta.ossUploadId) {
+    await ossAbortMultipart(meta.objectKey, meta.ossUploadId).catch(() => {});
+  }
+}
+
+/**
+ * 校验分片齐全 → 合并/提交为正式视频对象 → 清理会话
+ * local：按序合并文件 + 总大小/魔数复查；oss：ListParts 核对 → Complete →
+ * HeadObject 总大小复查 → Range 读文件头魔数复查。
  * @param uploadId 会话 ID
  * @param meta     会话元信息
  * @returns 合并后的 videoKey（调用方接着建项目行并启动流水线）
  */
 export async function completeAndMerge(uploadId: string, meta: UploadMeta): Promise<string> {
-  const received = new Set(listReceivedChunks(uploadId, meta));
+  if (meta.driver === "oss") return completeOss(uploadId, meta);
+  return completeLocal(uploadId, meta);
+}
+
+/**
+ * oss 模式完成：核对分片 → CompleteMultipartUpload → 大小/魔数复查
+ * @param uploadId 会话 ID
+ * @param meta     会话元信息
+ */
+async function completeOss(uploadId: string, meta: UploadMeta): Promise<string> {
+  const objectKey = meta.objectKey!;
+  const received = await listReceivedChunks(uploadId, meta);
+  const missing = meta.chunkCount - received.length;
+  if (missing > 0) {
+    throw new UploadSessionError(409, `还有 ${missing} 个分片未上传完成`);
+  }
+
+  const parts = await ossListParts(objectKey, meta.ossUploadId!);
+  await ossCompleteMultipart(objectKey, meta.ossUploadId!, parts);
+
+  // 总大小复查：合并结果必须等于 init 时声明的 size
+  const { size: merged } = await ossHead(objectKey);
+  if (merged !== meta.size) {
+    await ossDelete(objectKey).catch(() => {});
+    await cleanupSession(uploadId);
+    throw new UploadSessionError(400, `合并后大小不符（期望 ${meta.size}，实际 ${merged}），请重新上传`);
+  }
+
+  // 魔数复查：整体内容必须确实是白名单视频格式
+  const head = await ossGetRange(objectKey, 0, 15);
+  if (!isValidVideoMagic(head)) {
+    await ossDelete(objectKey).catch(() => {});
+    await cleanupSession(uploadId);
+    throw new UploadSessionError(415, "文件内容不是有效的视频格式");
+  }
+
+  await cleanupSession(uploadId);
+  return objectKey;
+}
+
+/**
+ * 清理本地会话目录
+ * @param uploadId 会话 ID
+ */
+async function cleanupSession(uploadId: string): Promise<void> {
+  await fs.promises.rm(sessionDir(uploadId), { recursive: true, force: true }).catch(() => {});
+}
+
+/**
+ * local 模式完成：校验分片齐全 → 按序合并 → 大小/魔数复查 → 清理暂存目录
+ * @param uploadId 会话 ID
+ * @param meta     会话元信息
+ */
+async function completeLocal(uploadId: string, meta: UploadMeta): Promise<string> {
+  const received = new Set(await listReceivedChunks(uploadId, meta));
   const missing = meta.chunkCount - received.size;
   if (missing > 0) {
     throw new UploadSessionError(409, `还有 ${missing} 个分片未上传完成`);
@@ -224,7 +366,7 @@ export async function completeAndMerge(uploadId: string, meta: UploadMeta): Prom
   ensureUploadDir();
   const ext = path.extname(meta.fileName).toLowerCase() || ".mp4";
   const videoKey = generateVideoKey(ext);
-  const destPath = path.join(/* turbopackIgnore: true */ process.cwd(), LOCAL_UPLOAD_DIR, videoKey);
+  const destPath = localPathByKey(videoKey);
 
   // 按序追加合并（预分配空间减少碎片）
   const out = fs.openSync(destPath, "w");
@@ -241,7 +383,7 @@ export async function completeAndMerge(uploadId: string, meta: UploadMeta): Prom
   const merged = fs.statSync(destPath).size;
   if (merged !== meta.size) {
     await fs.promises.unlink(destPath).catch(() => {});
-    fs.rmSync(sessionDir(uploadId), { recursive: true, force: true });
+    await cleanupSession(uploadId);
     throw new UploadSessionError(400, `合并后大小不符（期望 ${meta.size}，实际 ${merged}），请重新上传`);
   }
 
@@ -255,18 +397,17 @@ export async function completeAndMerge(uploadId: string, meta: UploadMeta): Prom
   }
   if (!isValidVideoMagic(head)) {
     await fs.promises.unlink(destPath).catch(() => {});
-    fs.rmSync(sessionDir(uploadId), { recursive: true, force: true });
+    await cleanupSession(uploadId);
     throw new UploadSessionError(415, "文件内容不是有效的视频格式");
   }
 
-  // 合并成功，清理暂存目录
-  fs.rmSync(sessionDir(uploadId), { recursive: true, force: true });
+  await cleanupSession(uploadId);
   return videoKey;
 }
 
 /**
  * 惰性清扫：删除创建超过 TTL 且未完成的会话目录
- * （init 时调用；全量扫描目录开销可接受——孤儿会话量级很小）
+ * oss 会话同时放弃 OSS Multipart Upload（异步 fire-and-forget，不阻塞 init）
  */
 function sweepStaleSessions(): void {
   let entries: string[];
@@ -284,6 +425,7 @@ function sweepStaleSessions(): void {
       const meta = JSON.parse(metaRaw) as UploadMeta;
       if (now - meta.createdAt > SESSION_TTL_MS) {
         fs.rmSync(dir, { recursive: true, force: true });
+        void abortIfOss(meta);
       }
     } catch {
       // meta 缺失或损坏：按创建时间兜底清理

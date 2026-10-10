@@ -2,15 +2,13 @@
  * @file /api/projects/[id] — 项目详情接口
  * @description
  *   GET：项目详情（READY 时附带转写分段）；仅本人可见，不存在/非本人统一返回 404。
- *   DELETE：删除项目（级联删除转写记录，同时清理本地视频文件）。
+ *   DELETE：删除项目（级联删除转写记录，同时清理当前驱动下的源视频与导出产物）。
  * 说明：Next.js 15+ 动态路由参数为 Promise，必须 await。
  */
 import { NextResponse } from "next/server";
-import fs from "node:fs";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { deleteLocalVideo } from "@/lib/storage";
-import { exportAbsPath } from "@/lib/export-pipeline";
+import { removeVideo, removeExportArtifact } from "@/lib/storage";
 
 /**
  * 查询项目详情（含转写结果）
@@ -57,7 +55,7 @@ export async function GET(
 }
 
 /**
- * 删除项目（级联删转写记录 + 清理本地视频文件）
+ * 删除项目（级联删转写记录 + 清理当前驱动下的源视频与导出产物）
  * @param _request 原始请求（未使用）
  * @param params   路由参数（Promise<{ id: string }>）
  */
@@ -74,18 +72,16 @@ export async function DELETE(
     return NextResponse.json({ error: "项目不存在" }, { status: 404 });
   }
 
-  // 磁盘文件先收集：导出产物（exports/{taskId}.mp4）与源视频
+  // 存储对象先收集：导出产物（exports/{taskId}.mp4）与源视频
   const exportFiles = await db.exportTask.findMany({
     where: { projectId: id, outputKey: { not: null } },
     select: { outputKey: true },
   });
 
   await db.project.delete({ where: { id } }); // transcript/exportTask 由 onDelete: Cascade 级联删除
-  if (project.videoKey) await deleteLocalVideo(project.videoKey);
-  // 级联删除不会清理磁盘导出产物，这里逐个删除防孤儿文件
-  await Promise.all(
-    exportFiles.map((t) => fs.promises.unlink(exportAbsPath(t.outputKey!)).catch(() => {})),
-  );
+  // 级联删除不会清理存储对象，这里逐个删除防孤儿文件（含 oss 模式的本地缓存副本）
+  if (project.videoKey) await removeVideo(project.videoKey);
+  await Promise.all(exportFiles.map((t) => removeExportArtifact(t.outputKey!)));
 
   return NextResponse.json({ ok: true });
 }

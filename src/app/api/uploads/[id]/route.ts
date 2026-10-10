@@ -2,10 +2,17 @@
  * @file GET /api/uploads/[id] — 查询分片上传会话（断点续传）
  * @description 客户端中断（刷新/断网）后，凭保存的 uploadId 查询已到齐的分片索引，
  *              跳过已传分片继续上传，避免从头重传大文件。
+ *              oss 模式额外返回重发的直传分片 URL（原签名可能已过期）。
  */
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getMeta, isValidUploadId, listReceivedChunks, UploadSessionError } from "@/lib/upload-session";
+import {
+  getMeta,
+  isValidUploadId,
+  listReceivedChunks,
+  refreshPartUrls,
+  UploadSessionError,
+} from "@/lib/upload-session";
 
 /**
  * 查询会话已到齐的分片
@@ -27,12 +34,15 @@ export async function GET(
 
   try {
     const meta = getMeta(id, user.id);
+    const uploadedIndexes = await listReceivedChunks(id, meta);
     return NextResponse.json({
       fileName: meta.fileName,
       size: meta.size,
       chunkSize: meta.chunkSize,
       chunkCount: meta.chunkCount,
-      uploadedIndexes: listReceivedChunks(id, meta),
+      mode: meta.driver,
+      uploadedIndexes,
+      ...(meta.driver === "oss" ? { partUrls: refreshPartUrls(meta) } : {}),
     });
   } catch (e) {
     if (e instanceof UploadSessionError) {

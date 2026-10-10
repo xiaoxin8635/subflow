@@ -6,13 +6,14 @@
  *              降级为进程内直跑（job 未入队，无重复风险）。
  *              processProject 只执行不兜错——错误上抛给 Worker 以触发自动重试，
  *              重试用尽后由 Worker 的 failed 事件调用 markProjectFailed 落库。
+ *              存储驱动：local 直接读盘；oss 先经 ensureLocalVideo 拉取到本地缓存。
  */
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { db } from "@/lib/db";
 import { extractAudioToMp3, probeDurationSec } from "@/lib/media";
-import { localVideoPath, publicUrlFor } from "@/lib/storage";
+import { ensureLocalVideo, publicUrlFor } from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
 import { polishSegments } from "@/lib/polish";
@@ -57,9 +58,9 @@ export async function processProject(projectId: string): Promise<void> {
   const tmpAudio = path.join(os.tmpdir(), `subflow-audio-${projectId}.mp3`);
 
   try {
-    // ① 探测时长并校验上限
+    // ① 探测时长并校验上限（oss 模式先拉取到本地缓存）
     await db.project.update({ where: { id: projectId }, data: { status: "TRANSCRIBING" } });
-    const videoPath = localVideoPath(project.videoKey);
+    const videoPath = await ensureLocalVideo(project.videoKey);
     const durationSec = await probeDurationSec(videoPath);
     if (durationSec > MAX_VIDEO_DURATION_SEC) {
       throw new Error(`视频时长 ${Math.round(durationSec / 60)} 分钟，超过上限 ${MAX_VIDEO_DURATION_SEC / 60} 分钟`);

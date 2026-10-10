@@ -26,6 +26,9 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       分片上传 + 断点续传、项目列表分页、落地页宣传修正
 - [x] **P1 任务队列**（`docs/ROADMAP.md` 2.1）：转写/导出进 Redis 队列 + 独立 Worker
       （并发上限/失败重试/宕机自动恢复/付费优先），限流器迁移 Redis 分布式滑窗
+- [x] **P1 OSS 直传**（`docs/ROADMAP.md` 2.2）：`STORAGE_DRIVER=oss` 时浏览器分片
+      直传 OSS（不经服务器带宽），worker 处理前拉取、成片传回 OSS，
+      预览/下载 302 签名 URL；local 驱动保留，双模式全链路 E2E 验证
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -60,6 +63,20 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   stalled 检测自动重新入队（Redis AOF 持久化，容器重启不丢任务）
 - 优先级：有有效订阅的用户任务优先消费（付费优先）
 - 降级策略：Redis 不可用时任务自动降级进程内直跑、限流器降级内存版（可用性优先，日志提示）
+
+### 对象存储说明（P1.2）
+
+- `STORAGE_DRIVER=local`（默认）：视频落盘 `LOCAL_UPLOAD_DIR`，上传/预览/下载全走服务器
+- `STORAGE_DRIVER=oss`：
+  - 上传：`POST /api/uploads/init` 调 OSS InitiateMultipartUpload 并为每个分片签发
+    直传 PUT URL（12h 有效，断点续传时由 status 接口重发），浏览器直传 OSS 不经服务器带宽；
+    complete 时服务端 ListParts 核对分片 → CompleteMultipartUpload → 大小/魔数复查
+  - 处理：worker 转写/烧录前经 `ensureLocalVideo` 拉源视频到本地缓存（`uploads/cache/`，
+    同大小副本复用），导出成片上传 OSS 后清理本地临时文件
+  - 读取：视频预览与成片下载 302 到签名 URL（预览 4h / 下载 10min 有效，流量直达 OSS）；
+    qwen-filetrans 转写直接用 12h 签名 URL，无需 `PUBLIC_ASSET_BASE_URL`
+- 首次启用：`npx tsx scripts/setup-oss-cors.ts` 配置 Bucket CORS（浏览器直传必需）；
+  OSS 客户端为自研零依赖实现（[src/lib/oss.ts](src/lib/oss.ts)，V1 签名 + Multipart + 签名 URL）
 
 ## 部署
 
@@ -110,7 +127,7 @@ npm run dev   # .env 的 ENABLE_INPROCESS_WORKER=1 时，进程内直接启动�
 | 模式 | 变量值 | 时间戳 | 适用 |
 | --- | --- | --- | --- |
 | 同步 | `ASR_PROVIDER=qwen-sync` | FFmpeg 静音检测 + 文本对齐（估算） | 本地开发（无公网地址） |
-| 异步 | `ASR_PROVIDER=qwen-filetrans` | 原生句级毫秒时间戳 | 生产（需配置 `PUBLIC_ASSET_BASE_URL`，DashScope 会主动下载源文件） |
+| 异步 | `ASR_PROVIDER=qwen-filetrans` | 原生句级毫秒时间戳 | 生产（oss 驱动自动用签名 URL；local 驱动需配 `PUBLIC_ASSET_BASE_URL`） |
 
 > 实测注意：qwen3-asr-flash 兼容模式的 `input_audio.data` 必须为
 > `data:audio/mp3;base64,...` 形式（裸 base64 会被误判为 URL），
@@ -132,6 +149,13 @@ node scripts/e2e-p0-test.mjs
 # P1 队列专项：无 Worker 任务滞留 → 启动消费 → 导出队列 + 扣费 → kill 宕机恢复
 # （脚本自管 Worker 子进程，运行前确保没有其他 Worker 在跑）
 node scripts/e2e-queue-test.mjs
+
+# P1.2 OSS 直传专项：STORAGE_DRIVER=oss 时运行（整传禁用 → 分片直传 → 转写
+# → 预览 302 → 导出下载 302 → 扣费 → 删除清理）
+node scripts/e2e-oss-test.mjs
+
+# 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
+npx tsx scripts/setup-oss-cors.ts
 
 # 生成激活码（落库并打印）
 node scripts/gen-redeem-codes.mjs --seconds 600 --count 5
