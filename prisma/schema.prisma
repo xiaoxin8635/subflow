@@ -32,6 +32,7 @@ model User {
   orders        Order[]
   creditLedger  CreditLedger[]
   sessions      Session[]
+  notifications Notification[]
 }
 
 // ---------------------------------------------------------------------
@@ -219,6 +220,24 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------
+// 站内通知：转写/导出完成与失败提醒（P1.3），铃铛未读数 + 列表
+// ---------------------------------------------------------------------
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String // TRANSCRIBE_DONE / TRANSCRIBE_FAILED / EXPORT_DONE / EXPORT_FAILED
+  title     String
+  body      String?
+  link      String? // 点击跳转路径（如 /project/xxx）
+  readAt    DateTime? // 已读时间（null = 未读）
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 // ----------------------------- 枚举定义 -----------------------------

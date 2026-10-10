@@ -7,6 +7,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  browserNotify,
+  notificationPermission,
+  requestNotificationPermission,
+} from "@/lib/browser-notify";
 
 /** /api/me 返回的余额结构（仅取需要的字段） */
 interface MeBody {
@@ -39,20 +44,23 @@ type ExportPhase = "idle" | "submitting" | "processing" | "done" | "failed";
 
 /**
  * 导出卡片组件
- * @param props.projectId   项目 ID
- * @param props.durationSec 视频时长（秒），用于预计扣费展示
- * @param props.styleId     当前选中样式 ID（导出按此样式烧录）
- * @param props.styleName   当前选中样式名称（展示用）
- * @param props.dirty       字幕是否有未保存修改（true 时禁止导出）
+ * @param props.projectId    项目 ID
+ * @param props.projectTitle 项目标题（系统通知文案用）
+ * @param props.durationSec  视频时长（秒），用于预计扣费展示
+ * @param props.styleId      当前选中样式 ID（导出按此样式烧录）
+ * @param props.styleName    当前选中样式名称（展示用）
+ * @param props.dirty        字幕是否有未保存修改（true 时禁止导出）
  */
 export function ExportCard({
   projectId,
+  projectTitle,
   durationSec,
   styleId,
   styleName,
   dirty,
 }: {
   projectId: string;
+  projectTitle?: string;
   durationSec: number;
   styleId: string | null;
   styleName: string | null;
@@ -62,7 +70,30 @@ export function ExportCard({
   const [balance, setBalance] = useState<number | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 浏览器通知授权状态（SSR 首帧为 unsupported，挂载后读取真实值）
+  const [perm, setPerm] = useState<string>("unsupported");
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPhase = useRef<ExportPhase>("idle");
+
+  // 挂载后读取通知授权状态（微任务：Notification 仅浏览器可读，避免 effect 内同步 setState）
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setPerm(notificationPermission());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    const label = projectTitle ? `「${projectTitle}」` : "视频";
+    if (prevPhase.current === "processing" && phase === "done") {
+      browserNotify("导出完成", `${label}已烧录完成，可下载成片`);
+    } else if (prevPhase.current === "processing" && phase === "failed") {
+      browserNotify("导出失败", `${label}导出失败，请回页面查看原因`);
+    }
+    prevPhase.current = phase;
+  }, [phase, projectTitle]);
 
   const costSeconds = Math.ceil(durationSec);
   const insufficient = balance != null && balance < costSeconds;
@@ -226,9 +257,18 @@ export function ExportCard({
 
       {/* 烧录进行中提示 */}
       {phase === "processing" && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-neutral-500">
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand/20 border-t-brand" />
           FFmpeg 正在烧录字幕，一般几秒到几分钟（取决于视频长度）…
+          {perm === "default" && (
+            <button
+              type="button"
+              onClick={() => void requestNotificationPermission().then(setPerm)}
+              className="text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand"
+            >
+              开启完成提醒（切到其他页面时通知你）
+            </button>
+          )}
         </div>
       )}
 

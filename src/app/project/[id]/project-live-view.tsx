@@ -8,6 +8,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@prisma/client";
 import { formatDuration, ProjectStatusBadge } from "@/components/project-status";
+import {
+  browserNotify,
+  notificationPermission,
+  requestNotificationPermission,
+} from "@/lib/browser-notify";
 import { SubtitleEditor } from "./subtitle-editor";
 import type { EditorSegment } from "./subtitle-editor";
 
@@ -49,7 +54,22 @@ export function ProjectLiveView({
   initial: ProjectDetail;
 }) {
   const [project, setProject] = useState<ProjectDetail>(initial);
+  // 浏览器通知授权状态（SSR 首帧为 unsupported，挂载后读取真实值）
+  const [perm, setPerm] = useState<string>("unsupported");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 上一轮状态（检测 ACTIVE → 终态跃迁时弹系统通知）
+  const prevStatus = useRef<ProjectStatus>(initial.status);
+
+  // 挂载后读取通知授权状态（微任务：Notification 仅浏览器可读，避免 effect 内同步 setState）
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setPerm(notificationPermission());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 轮询：仅在中间态启动；卸载/终态时清理
   useEffect(() => {
@@ -60,7 +80,19 @@ export function ProjectLiveView({
         const res = await fetch(`/api/projects/${projectId}`, { cache: "no-store" });
         if (!res.ok) return; // 瞬时错误（如 dev 重编译）静默跳过，下个周期重试
         const body = (await res.json()) as { project: ProjectDetail };
+        const from = prevStatus.current;
+        const to = body.project.status;
         setProject(body.project);
+        prevStatus.current = to;
+        // ACTIVE → READY/FAILED 跃迁：弹系统通知（仅授权且页面不可见时生效）
+        if (from !== to && ACTIVE_STATUSES.has(from) && !ACTIVE_STATUSES.has(to)) {
+          browserNotify(
+            to === "READY" ? "字幕转写完成" : "转写失败",
+            to === "READY"
+              ? `「${body.project.title}」字幕已就绪，可编辑与导出`
+              : `「${body.project.title}」处理失败，请回页面查看原因`,
+          );
+        }
       } catch {
         // 网络抖动：忽略，等待下一轮
       }
@@ -109,6 +141,15 @@ export function ProjectLiveView({
             {project.status === "TRANSCRIBING" ? "AI 正在识别语音…" : project.status === "POLISHING" ? "AI 正在润色字幕…" : "任务排队中…"}
           </p>
           <p className="mt-1 text-sm text-neutral-500">页面每 3 秒自动刷新，无需手动操作</p>
+          {perm === "default" && (
+            <button
+              type="button"
+              onClick={() => void requestNotificationPermission().then(setPerm)}
+              className="mt-4 text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand"
+            >
+              开启完成提醒（切到其他页面时通知你）
+            </button>
+          )}
         </div>
       )}
 
@@ -129,7 +170,12 @@ export function ProjectLiveView({
             <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
         ) : (
-          <SubtitleEditor projectId={projectId} initialSegments={segments} durationSec={project.durationSec ?? 0} />
+          <SubtitleEditor
+            projectId={projectId}
+            projectTitle={project.title}
+            initialSegments={segments}
+            durationSec={project.durationSec ?? 0}
+          />
         ))}
     </div>
   );

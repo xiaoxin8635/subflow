@@ -21,6 +21,7 @@ import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { sendAlert } from "@/lib/alert";
+import { notify } from "@/lib/notify";
 import { buildAss, DEFAULT_ASS_CONFIG } from "@/lib/ass";
 import { enqueueExport } from "@/lib/queue/queues";
 import { ensureLocalVideo, isOss, removeLocalVideoCache } from "@/lib/storage";
@@ -70,9 +71,17 @@ export async function startExport(taskId: string, userId: string): Promise<void>
  * @param message 失败原因
  */
 export async function markExportFailed(taskId: string, message: string): Promise<void> {
-  await db.exportTask
-    .update({ where: { id: taskId }, data: { status: "FAILED", error: message, finishedAt: new Date() } })
-    .catch(() => {});
+  // include project 顺带取 userId/title 用于站内通知（任务行已级联删除则跳过通知）
+  const row = await db.exportTask
+    .update({
+      where: { id: taskId },
+      data: { status: "FAILED", error: message, finishedAt: new Date() },
+      include: { project: { select: { id: true, userId: true, title: true } } },
+    })
+    .catch(() => null);
+  if (row) {
+    await notify(row.project.userId, "EXPORT_FAILED", "导出失败", `「${row.project.title}」导出失败：${message}`, `/project/${row.project.id}`);
+  }
 }
 
 /**
@@ -192,6 +201,8 @@ export async function processExport(taskId: string): Promise<void> {
       });
     });
     logger.info("export", "导出任务完成", { taskId, title: project.title, costSeconds });
+    // 站内通知：导出完成（铃铛提醒，旁路失败不影响主流程）
+    await notify(project.userId, "EXPORT_DONE", "导出完成", `「${project.title}」已导出（消耗 ${costSeconds} 秒额度）`, `/project/${project.id}`);
     // ⑤ oss 模式：事务成功后清理本地成片与源视频缓存副本（源视频保留在 OSS 供预览/再导出）
     if (isOss()) {
       await fs.unlink(outAbsPath).catch(() => {});

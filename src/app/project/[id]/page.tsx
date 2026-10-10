@@ -10,6 +10,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { SiteHeader } from "@/components/site-header";
+import { NotificationBell } from "@/components/notification-bell";
 import { ProjectLiveView } from "./project-live-view";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
@@ -32,10 +33,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     <div className="flex min-h-screen flex-col bg-neutral-50">
       <SiteHeader />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
-        <div className="text-sm text-neutral-500">
-          <Link href="/dashboard" className="transition-colors hover:text-brand">
-            ← 返回项目列表
-          </Link>
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-neutral-500">
+            <Link href="/dashboard" className="transition-colors hover:text-brand">
+              ← 返回项目列表
+            </Link>
+          </div>
+          <NotificationBell />
         </div>
         <ProjectLiveView
           projectId={project.id}

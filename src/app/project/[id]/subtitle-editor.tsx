@@ -39,15 +39,18 @@ function fmt(t: number): string {
 /**
  * 字幕编辑器组件
  * @param projectId       项目 ID（视频流/保存接口地址）
+ * @param projectTitle    项目标题（导出系统通知文案用）
  * @param initialSegments 服务端首屏字幕分段
  * @param durationSec     视频时长（秒），用于导出扣费展示
  */
 export function SubtitleEditor({
   projectId,
+  projectTitle,
   initialSegments,
   durationSec,
 }: {
   projectId: string;
+  projectTitle?: string;
   initialSegments: EditorSegment[];
   durationSec: number;
 }) {
@@ -216,6 +219,7 @@ export function SubtitleEditor({
         {/* 导出卡片（按当前样式烧录，完成后可下载） */}
         <ExportCard
           projectId={projectId}
+          projectTitle={projectTitle}
           durationSec={durationSec}
           styleId={activeStyleId}
           styleName={styles.find((s) => s.id === activeStyleId)?.name ?? null}

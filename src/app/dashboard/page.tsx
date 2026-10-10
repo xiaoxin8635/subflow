@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { SiteHeader } from "@/components/site-header";
+import { NotificationBell } from "@/components/notification-bell";
 import { ProjectStatusBadge, formatDuration } from "@/components/project-status";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
@@ -63,6 +64,7 @@ export default async function DashboardPage({
             <p className="mt-1 text-sm text-neutral-500">上传视频，AI 自动生成字幕</p>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <div className="rounded-xl border border-black/5 bg-white px-4 py-2 text-sm shadow-sm">
               <span className="text-neutral-500">{maskPhone(user.phone)}</span>
               <span className="mx-2 text-neutral-300">|</span>

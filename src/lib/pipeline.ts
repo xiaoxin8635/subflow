@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { db } from "@/lib/db";
+import { notify } from "@/lib/notify";
 import { extractAudioToMp3, probeDurationSec } from "@/lib/media";
 import { ensureLocalVideo, publicUrlFor } from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
@@ -40,9 +41,13 @@ export async function startProcessing(projectId: string, userId: string): Promis
  * @param message   失败原因
  */
 export async function markProjectFailed(projectId: string, message: string): Promise<void> {
-  await db.project
+  // update 返回更新后的行：顺带取 userId/title/link 用于站内通知（行已删则跳过通知）
+  const row = await db.project
     .update({ where: { id: projectId }, data: { status: "FAILED", error: message } })
-    .catch(() => {});
+    .catch(() => null);
+  if (row) {
+    await notify(row.userId, "TRANSCRIBE_FAILED", "转写失败", `「${row.title}」处理失败：${message}`, `/project/${row.id}`);
+  }
 }
 
 /**
@@ -98,6 +103,8 @@ export async function processProject(projectId: string): Promise<void> {
     });
     await db.project.update({ where: { id: projectId }, data: { status: "READY", error: null } });
     console.log(`[pipeline] 项目 ${projectId} 处理完成：${segments.length} 段（润色=${polished}）`);
+    // 站内通知：转写完成（铃铛提醒，旁路失败不影响主流程）
+    await notify(project.userId, "TRANSCRIBE_DONE", "转写完成", `「${project.title}」字幕已就绪，共 ${segments.length} 段`, `/project/${projectId}`);
   } finally {
     await fs.unlink(tmpAudio).catch(() => {});
   }

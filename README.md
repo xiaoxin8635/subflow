@@ -33,6 +33,8 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       （任务最终失败/额度守卫/进程异常）+ 管理后台失败任务页与一键重试
 - [x] **P1 多格式导出**（`docs/ROADMAP.md` 2.4）：字幕文件 SRT / VTT / ASS 三格式
       下载（ASS 带样式与关键词高亮，可选 styleId），不消耗额度
+- [x] **P1 完成通知**（`docs/ROADMAP.md` 2.3）：站内通知（铃铛未读数 + 下拉列表 +
+      已读/全部已读）覆盖转写/导出的完成与失败四类事件，页面不可见时浏览器系统通知
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -97,6 +99,20 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   （instrumentation）与独立 Worker 进程均挂 `uncaughtException` / `unhandledRejection`
 - **失败任务页**：`/admin` 底部展示 FAILED 项目/导出任务（最近 20 条）与队列积压数，
   每条可一键重试（`POST /api/admin/retry`：移除旧 failed job → 重置状态 → 重新入队）
+
+### 完成通知说明（P1.3）
+
+- **站内通知**（[src/lib/notify.ts](src/lib/notify.ts)）：转写完成/失败、导出完成/失败
+  四类事件写入 `Notification` 表；写入为旁路容错（失败仅落日志，不影响主流程）
+- **读取**：`GET /api/notifications` 返回未读数 + 最近 30 条；
+  `POST /api/notifications/read` 支持批量（`{ids}`）与全量（`{all:true}`）已读，
+  where 绑定本人 userId 防越权；重复已读幂等
+- **铃铛**（[src/components/notification-bell.tsx](src/components/notification-bell.tsx)）：
+  60 秒轮询未读红点、tab 可见时立即刷新、下拉列表点击跳转并标已读；
+  挂载于工作台与项目详情页顶栏
+- **浏览器系统通知**（[src/lib/browser-notify.ts](src/lib/browser-notify.ts)）：
+  处理中 UI 提供「开启完成提醒」授权按钮（绝不自动弹授权框）；仅当页面不可见
+  （`document.hidden`）时在状态跃迁到终态时弹系统通知，可见时页内已有状态展示
 
 ## 部署
 
@@ -177,6 +193,10 @@ node scripts/e2e-oss-test.mjs
 # P1.6 可观测性专项：告警收发+冷却（本地 webhook 模拟）→ 权限 → 无音轨视频
 # 制造真实失败 → admin 失败重试闭环（运行约 3-5 分钟，含重试退避等待）
 node scripts/e2e-observability-test.mjs
+
+# P1.3 完成通知专项：权限 → 参数校验 → 双视频转写完成通知 → 单条/全部已读
+# → 越权 → 无音轨失败通知 → 导出完成通知（运行约 3-6 分钟，真实调用 DashScope）
+node scripts/e2e-notify-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts
