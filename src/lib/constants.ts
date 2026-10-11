@@ -127,3 +127,27 @@ export const INVITE_CODE_LENGTH = 8;
 
 /** 邀请码格式校验（前后端共用：仅字符集内的大写字母数字，8 位） */
 export const INVITE_CODE_RE = /^[2-9A-HJ-NP-Z]{8}$/;
+
+/**
+ * 加油包档位（P2.8 商业化）：非订阅的一次性时长包——激活码收款模式下，
+ * 购买页展示档位、客服按档发码（bonusSeconds = seconds 的时长码）、
+ * 用户兑换到账（REDEEM_BONUS 流水）。改档位只动这里，购买页与后台同源。
+ * 单价随包体递减（0.165 → 0.15 → 0.125 元/分钟），激励买大包。
+ */
+export const ADDON_PACKAGES = [
+  { id: "starter", name: "体验加油包", priceCents: 990, seconds: 3600 },
+  { id: "standard", name: "标准加油包", priceCents: 2990, seconds: 12000 },
+  { id: "pro", name: "大容量加油包", priceCents: 4990, seconds: 24000 },
+] as const;
+
+/** 加油包档位类型 */
+export type AddonPackage = (typeof ADDON_PACKAGES)[number];
+
+/**
+ * 按 ID 查询加油包档位
+ * @param id 档位 ID
+ * @returns 档位对象（未命中返回 null）
+ */
+export function findAddonPackage(id: string): AddonPackage | null {
+  return ADDON_PACKAGES.find((p) => p.id === id) ?? null;
+}

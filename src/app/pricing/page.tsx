@@ -1,6 +1,7 @@
 /**
  * @file 购买页（/pricing，服务端组件）
- * @description 展示在售套餐（数据来自 Plan 表，与后台发码同一数据源），
+ * @description 展示在售套餐（数据来自 Plan 表，与后台发码同一数据源）与
+ *              一次性加油包档位（ADDON_PACKAGES 常量，与后台快捷发码同源），
  *              以及 MVP 阶段的购买流程：扫码付款 → 客服发激活码 → 兑换到账。
  *              收款码图片放 public/pay-qr/wechat.png 与 alipay.png（可任选其一配置），
  *              未配置时显示待配置占位（不影响页面结构）。
@@ -9,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { ADDON_PACKAGES } from "@/lib/constants";
 import { SiteHeader } from "@/components/site-header";
 
 // 读取数据库套餐（动态渲染声明，Cache Components 下必须显式）
@@ -94,6 +96,46 @@ export default async function PricingPage() {
           )}
         </div>
 
+        {/* 一次性加油包（P2.8）：无需订阅，买多少用多少，用完可再购 */}
+        <section className="mt-12">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-xl font-semibold">⚡ 加油包（一次性额度）</h2>
+            <p className="text-sm text-neutral-500">
+              不想订阅？买多少用多少，额度永久有效，用完可再购
+            </p>
+          </div>
+          <div className="mt-5 grid gap-6 md:grid-cols-3">
+            {ADDON_PACKAGES.map((pkg, i) => {
+              const pricePerMin = (pkg.priceCents / 100 / (pkg.seconds / 60)).toFixed(2);
+              return (
+                <div
+                  key={pkg.id}
+                  className={`relative rounded-2xl border bg-white p-6 shadow-sm ${
+                    i === 1 ? "border-brand/40 ring-1 ring-brand/20" : "border-black/5"
+                  }`}
+                >
+                  {i === 1 && (
+                    <span className="absolute -top-3 left-6 rounded-full bg-brand px-3 py-0.5 text-xs font-medium text-white">
+                      最受欢迎
+                    </span>
+                  )}
+                  <h3 className="font-semibold">{pkg.name}</h3>
+                  <p className="mt-3">
+                    <span className="text-3xl font-bold">¥{yuan(pkg.priceCents)}</span>
+                    <span className="text-neutral-500"> / {formatSeconds(pkg.seconds)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-400">
+                    折合 ¥{pricePerMin} / 分钟 · 一次性到手，无需月付
+                  </p>
+                  <p className="mt-4 text-sm text-neutral-600">
+                    兑换后额度直接进账户余额，转写 / 导出 / 翻译通用
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         {/* 购买流程 */}
         <section className="mt-12 rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
           <h2 className="text-lg font-semibold">购买流程（三步到账）</h2>
@@ -101,7 +143,7 @@ export default async function PricingPage() {
             <li>
               <p className="text-sm font-medium text-brand">① 扫码付款</p>
               <p className="mt-1 text-sm text-neutral-600">
-                扫下方收款码，按套餐价格付款，备注您的手机号后 4 位
+                扫下方收款码，按套餐或加油包价格付款，备注您的手机号后 4 位
               </p>
             </li>
             <li>
