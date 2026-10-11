@@ -289,8 +289,8 @@ export function ExportCard({
           value={clipStartStr}
           onChange={(e) => setClipStartStr(e.target.value)}
           placeholder="0"
-          className={`w-20 rounded-lg border bg-white/[0.04] px-2 py-1 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 ${
-            clipEnabled && clipStart == null ? "border-red-400" : "border-white/10"
+          className={`w-20 rounded-lg border px-2 py-1 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+            clipEnabled && clipStart == null ? "border-red-400" : "border-neutral-200"
           }`}
         />
         <span className="text-neutral-400">s</span>
@@ -299,7 +299,7 @@ export function ExportCard({
         type="button"
         onClick={() => fillCurrent("start")}
         title="填入播放器当前进度"
-        className="rounded-lg border border-white/10 px-2 py-1 text-xs text-neutral-400 transition-colors hover:border-brand hover:text-brand-strong"
+        className="rounded-lg border border-neutral-200 px-2 py-1 text-xs text-neutral-500 transition-colors hover:border-brand hover:text-brand"
       >
         当前
       </button>
@@ -311,8 +311,8 @@ export function ExportCard({
           value={clipEndStr}
           onChange={(e) => setClipEndStr(e.target.value)}
           placeholder={String(Math.round(durationSec))}
-          className={`w-20 rounded-lg border bg-white/[0.04] px-2 py-1 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 ${
-            clipEnabled && clipEnd == null ? "border-red-400" : "border-white/10"
+          className={`w-20 rounded-lg border px-2 py-1 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+            clipEnabled && clipEnd == null ? "border-red-400" : "border-neutral-200"
           }`}
         />
         <span className="text-neutral-400">s</span>
@@ -321,12 +321,12 @@ export function ExportCard({
         type="button"
         onClick={() => fillCurrent("end")}
         title="填入播放器当前进度"
-        className="rounded-lg border border-white/10 px-2 py-1 text-xs text-neutral-400 transition-colors hover:border-brand hover:text-brand-strong"
+        className="rounded-lg border border-neutral-200 px-2 py-1 text-xs text-neutral-500 transition-colors hover:border-brand hover:text-brand"
       >
         当前
       </button>
       {clipEnabled && !clipValid && (
-        <span className="text-xs text-red-400">
+        <span className="text-xs text-red-500">
           请填写 0 ~ {Math.round(durationSec)}s 内的起止秒，且结束需大于开始
         </span>
       )}
@@ -334,7 +334,7 @@ export function ExportCard({
   );
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-4">
+    <div className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
       {mediaKind === "audio" ? (
         /* 纯音频项目：无烧录语义，提供片段裁剪导出（纯裁剪输出 mp3） */
         <div>
@@ -351,7 +351,7 @@ export function ExportCard({
             {phase === "done" && taskId ? (
               <a
                 href={`/api/exports/${taskId}/download`}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
               >
                 ⬇ 下载片段
               </a>
@@ -388,7 +388,7 @@ export function ExportCard({
           {phase === "done" && taskId ? (
             <a
               href={`/api/exports/${taskId}/download`}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
             >
               ⬇ 下载成片
             </a>
@@ -415,7 +415,7 @@ export function ExportCard({
         </div>
 
         {/* 片段导出开关与区间输入（P2.6） */}
-        <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-sm text-neutral-300">
+        <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-sm text-neutral-600">
           <input
             type="checkbox"
             checked={clipEnabled}
@@ -428,8 +428,8 @@ export function ExportCard({
 
         {/* 字幕语言（P2.7 双语）：原文 / 双语（原文+译文同屏，原文在上译文在下） */}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
-          <span className="text-neutral-400">字幕语言</span>
-          <label className="flex cursor-pointer items-center gap-1.5 text-neutral-300">
+          <span className="text-neutral-500">字幕语言</span>
+          <label className="flex cursor-pointer items-center gap-1.5 text-neutral-600">
             <input
               type="radio"
               name="subLang"
@@ -439,7 +439,7 @@ export function ExportCard({
             />
             原文
           </label>
-          <label className="flex cursor-pointer items-center gap-1.5 text-neutral-300">
+          <label className="flex cursor-pointer items-center gap-1.5 text-neutral-600">
             <input
               type="radio"
               name="subLang"
@@ -454,7 +454,7 @@ export function ExportCard({
             <select
               value={bilingualLang}
               onChange={(e) => setBilingualLang(e.target.value)}
-              className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="rounded-lg border border-neutral-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
             >
               {doneLangs.map((lang) => (
                 <option key={lang} value={lang}>
@@ -464,22 +464,22 @@ export function ExportCard({
             </select>
           )}
           {doneLangs.length === 0 && (
-            <span className="text-xs text-neutral-500">完成一次翻译后可烧录双语字幕（见下方翻译卡）</span>
+            <span className="text-xs text-neutral-400">完成一次翻译后可烧录双语字幕（见下方翻译卡）</span>
           )}
         </div>
       </div>
       )}
 
       {/* 字幕文件下载（纯文本生成不扣额度；读取库内数据，未保存修改时同样禁用） */}
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-        <p className="text-xs text-neutral-500">
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
+        <p className="text-xs text-neutral-400">
           字幕文件下载 · 不消耗额度{dirty && " · 有未保存修改时下载的是已保存版本"}
         </p>
         <div className="flex shrink-0 items-center gap-2">
           <a
             href={`/api/projects/${projectId}/srt`}
             title={dirty ? "建议先保存修改，下载内容为已保存版本" : "通用格式：剪映 / PR / 达芬奇"}
-            className={`rounded-xl border border-white/10 px-3 py-1.5 text-sm text-neutral-300 transition-colors hover:border-white/25 ${
+            className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
               dirty ? "opacity-60" : ""
             }`}
           >
@@ -488,7 +488,7 @@ export function ExportCard({
           <a
             href={`/api/projects/${projectId}/vtt`}
             title={dirty ? "建议先保存修改，下载内容为已保存版本" : "网页播放器通用（HTML5 track）"}
-            className={`rounded-xl border border-white/10 px-3 py-1.5 text-sm text-neutral-300 transition-colors hover:border-white/25 ${
+            className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
               dirty ? "opacity-60" : ""
             }`}
           >
@@ -497,7 +497,7 @@ export function ExportCard({
           <a
             href={`/api/projects/${projectId}/ass${assQuery ? `?${assQuery}` : ""}`}
             title={dirty ? "建议先保存修改，下载内容为已保存版本" : "带样式与关键词高亮：mpv / PotPlayer 直接挂载（按所选模板配置，未保存的微调不含在内）"}
-            className={`rounded-xl border border-white/10 px-3 py-1.5 text-sm text-neutral-300 transition-colors hover:border-white/25 ${
+            className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
               dirty ? "opacity-60" : ""
             }`}
           >
@@ -508,14 +508,14 @@ export function ExportCard({
 
       {/* 导出进行中提示 */}
       {phase === "processing" && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-neutral-400">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-neutral-500">
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand/20 border-t-brand" />
           FFmpeg 正在{clipEnabled ? "裁剪" : bilingualLang ? "烧录双语字幕" : "烧录字幕"}，一般几秒到几分钟（取决于媒体长度）…
           {perm === "default" && (
             <button
               type="button"
               onClick={() => void requestNotificationPermission().then(setPerm)}
-              className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand-strong"
+              className="text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand"
             >
               开启完成提醒（切到其他页面时通知你）
             </button>
@@ -525,7 +525,7 @@ export function ExportCard({
 
       {/* 余额不足引导 */}
       {insufficient && !busy && (
-        <p className="mt-3 text-sm text-amber-400">
+        <p className="mt-3 text-sm text-amber-600">
           额度不足：本次导出需 {costSeconds} 秒。
           <Link href="/dashboard/redeem" className="ml-1 underline underline-offset-2">
             去兑换额度 →
@@ -535,16 +535,16 @@ export function ExportCard({
 
       {/* 未保存修改提示 */}
       {dirty && !busy && (
-        <p className="mt-3 text-sm text-amber-400">字幕有未保存修改，请先点击右上角「保存修改」再导出</p>
+        <p className="mt-3 text-sm text-amber-600">字幕有未保存修改，请先点击右上角「保存修改」再导出</p>
       )}
 
       {/* 失败信息 + 重试 */}
       {phase === "failed" && error && (
         <div className="mt-3">
-          <p className="text-sm text-red-400">导出失败：{error}</p>
+          <p className="text-sm text-red-600">导出失败：{error}</p>
           <button
             onClick={() => setPhase("idle")}
-            className="mt-1 text-sm text-brand-strong underline underline-offset-2"
+            className="mt-1 text-sm text-brand underline underline-offset-2"
           >
             返回重试
           </button>

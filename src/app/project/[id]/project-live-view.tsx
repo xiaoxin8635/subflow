@@ -135,7 +135,7 @@ export function ProjectLiveView({
         <h1 className="text-2xl font-bold tracking-tight">{project.title}</h1>
         <ProjectStatusBadge status={project.status} />
       </div>
-      <p className="mt-1 text-sm text-neutral-400">
+      <p className="mt-1 text-sm text-neutral-500">
         {project.durationSec != null && <>时长 {formatDuration(project.durationSec)} · </>}
         {project.transcript?.asrProvider && <>引擎 {project.transcript.asrProvider} · </>}
         {project.transcript?.llmPolished ? "已经 AI 润色" : "未润色"}
@@ -143,7 +143,7 @@ export function ProjectLiveView({
 
       {/* 处理中：监视器占位（转写中封面带扫描线，与工作台列表同款母语）+ 状态行 */}
       {ACTIVE_STATUSES.has(project.status) && (
-        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-white/[0.06] bg-white/[0.04] p-4 text-center sm:p-5">
+        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-black/5 bg-white p-4 text-center shadow-sm sm:p-5">
           <ProjectCover
             projectId={projectId}
             coverKey={project.coverKey ?? null}
@@ -166,7 +166,7 @@ export function ProjectLiveView({
                     : "任务排队中…"}
             </p>
           </div>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-1 text-sm text-neutral-500">
             {project.status === "UPLOADED" && project.queuePosition
               ? "前面的任务完成后自动开始，页面自动刷新，无需手动操作"
               : "页面每 3 秒自动刷新，无需手动操作"}
@@ -175,7 +175,7 @@ export function ProjectLiveView({
             <button
               type="button"
               onClick={() => void requestNotificationPermission().then(setPerm)}
-              className="mt-3 text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand-strong"
+              className="mt-3 text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand"
             >
               开启完成提醒（切到其他页面时通知你）
             </button>
@@ -185,19 +185,19 @@ export function ProjectLiveView({
 
       {/* 失败提示 */}
       {project.status === "FAILED" && (
-        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-center">
+        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-red-100 bg-red-50 p-6 text-center">
           <div className="text-3xl">⚠️</div>
-          <p className="mt-3 font-medium text-red-400">处理失败</p>
-          <p className="mt-1 text-sm text-red-400/90">{project.error ?? "未知错误"}</p>
-          <p className="mt-3 text-xs text-red-400/60">可返回项目列表重新上传；额度不会被消耗</p>
+          <p className="mt-3 font-medium text-red-700">处理失败</p>
+          <p className="mt-1 text-sm text-red-600">{project.error ?? "未知错误"}</p>
+          <p className="mt-3 text-xs text-red-400">可返回项目列表重新上传；额度不会被消耗</p>
         </div>
       )}
 
       {/* 字幕编辑器（READY；翻译/导出在编辑器顶部按钮唤起的抽屉内） */}
       {project.status === "READY" &&
         (segments.length === 0 ? (
-          <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-white/[0.06] bg-white/[0.04] p-10 text-center">
-            <p className="text-sm text-neutral-400">未识别到字幕内容</p>
+          <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
         ) : (
           <SubtitleEditor

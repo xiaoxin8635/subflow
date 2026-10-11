@@ -3,12 +3,10 @@
  * @file 通用右侧滑入抽屉（批次①信息架构重排）
  * @description 编辑器的次要工具面板（字幕翻译 / 导出成片）收进抽屉：
  *              主界面只保留剪辑主任务，低频操作点顶部按钮唤起。
- *              批次②暗色主题：面板为深玻璃底（#131420）+ 白描边 + 遮罩加深，
- *              与暗色剪辑台融为一体。交互：遮罩点击 / Esc 键 / 右上角 ✕ 关闭；
- *              打开时锁定 body 滚动；入场动画（遮罩淡入 + 面板右滑入）由
- *              挂载后一帧切换 shown 驱动。父组件以条件渲染挂载
- *              （`{drawer && <ToolDrawer/>}`），关闭即卸载、内部状态自然丢弃，
- *              无需退出动画。
+ *              交互：遮罩点击 / Esc 键 / 右上角 ✕ 关闭；打开时锁定 body 滚动；
+ *              入场动画（遮罩淡入 + 面板右滑入）由挂载后一帧切换 shown 驱动。
+ *              父组件以条件渲染挂载（`{drawer && <ToolDrawer/>}`），
+ *              关闭即卸载、内部状态自然丢弃，无需退出动画。
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -50,27 +48,27 @@ export function ToolDrawer({
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
-      {/* 遮罩：点击关闭（暗色主题下遮罩更深，衬托玻璃面板） */}
+      {/* 遮罩：点击关闭 */}
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-black/65 backdrop-blur-[2px] transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
       {/* 面板：右侧滑入 */}
       <div
-        className={`absolute inset-y-0 right-0 flex w-full max-w-lg flex-col border-l border-white/10 bg-[#131420] shadow-2xl transition-transform duration-300 ease-out ${
+        className={`absolute inset-y-0 right-0 flex w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-5 py-4">
           <h2 className="text-base font-semibold">{title}</h2>
           <button
             ref={closeRef}
             type="button"
             onClick={onClose}
             title="关闭（Esc）"
-            className="rounded-lg px-2 py-1 text-lg leading-none text-neutral-500 transition-colors hover:bg-white/10 hover:text-neutral-200"
+            className="rounded-lg px-2 py-1 text-lg leading-none text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
           >
             ✕
           </button>

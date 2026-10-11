@@ -136,7 +136,7 @@ export function WaveformStrip({
     if (!ctx) return;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, boxW, h);
-    ctx.fillStyle = "#4b4d5a"; // 暗色主题波形柱：亮于面板底、暗于字幕块，层次居中
+    ctx.fillStyle = "#d4d4d8"; // neutral-300：底图中性，段落块与播放染色叠于其上
     let max = 0;
     for (const p of peaks) if (p > max) max = p;
     if (max === 0) max = 1;
@@ -239,7 +239,7 @@ export function WaveformStrip({
         else if (e.buttons & 1) onSeek(timeFromEvent(e.clientX)); // 空白处按住左键拖动 scrub
       }}
       onPointerUp={() => onDragUp()}
-      className="relative h-16 cursor-pointer touch-none select-none overflow-visible rounded-lg bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+      className="relative h-16 cursor-pointer touch-none select-none overflow-visible rounded-lg bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1"
       title="点击定位 · 拖动字幕块边缘调时间 · 拖动块整体平移"
     >
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full rounded-lg" />
@@ -249,12 +249,12 @@ export function WaveformStrip({
         <>
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-0 rounded-l-lg bg-accent/15"
+            className="pointer-events-none absolute inset-y-0 left-0 rounded-l-lg bg-brand/10"
             style={{ width: `${progress * 100}%` }}
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-accent transition-[left] duration-150 ease-linear"
+            className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-brand transition-[left] duration-150 ease-linear"
             style={{ left: `calc(${progress * 100}% - 1px)` }}
           />
         </>
@@ -283,10 +283,10 @@ export function WaveformStrip({
               onPointerUp={onDragUp}
               className={`group absolute inset-y-1 rounded-md border transition-colors ${
                 isDragging
-                  ? "z-20 cursor-ew-resize border-brand bg-brand/50 shadow-sm"
+                  ? "z-20 cursor-ew-resize border-brand bg-brand/40 shadow-sm"
                   : overlapping
-                    ? "cursor-grab border-amber-400/80 bg-amber-400/30 hover:bg-amber-400/40"
-                    : "cursor-grab border-brand/60 bg-brand/30 hover:bg-brand/45"
+                    ? "cursor-grab border-amber-500/80 bg-amber-400/30 hover:bg-amber-400/40"
+                    : "cursor-grab border-brand/50 bg-brand/25 hover:bg-brand/35"
               }`}
               style={{ left: `${left}%`, width: `${width}%` }}
               title={
@@ -299,7 +299,7 @@ export function WaveformStrip({
               {seg.text && (
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-2.5 text-[10px] leading-tight text-white/90"
+                  className="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-2.5 text-[10px] leading-tight text-neutral-800"
                 >
                   <span className="truncate">{seg.text}</span>
                 </span>
@@ -313,9 +313,9 @@ export function WaveformStrip({
                 aria-hidden
                 className="absolute inset-y-0 right-0 w-2 rounded-r-md bg-brand/0 transition-colors group-hover:bg-brand/50"
               />
-              {/* 拖拽中的时间提示（暗底上反转为亮底暗字，保证可读） */}
+              {/* 拖拽中的时间提示 */}
               {isDragging && (
-                <span className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#e8e9ee] px-2 py-0.5 font-mono text-xs tabular-nums text-[#0b0c10]">
+                <span className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-0.5 font-mono text-xs tabular-nums text-white">
                   {fmtWave(s)}–{fmtWave(e_)}
                 </span>
               )}

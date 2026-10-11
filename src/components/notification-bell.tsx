@@ -7,8 +7,6 @@
  *              支持「全部已读」。tab 可见时立即刷新一次（回页即见最新）。
  *              挂载点：AppShell 侧边栏（variant="dark"）与 project 详情页顶栏
  *              （默认浅色），两种宿主配色由 BELL_STYLES 区分。
- *              批次②暗色主题：全站宿主均为暗色，下拉面板为暗色玻璃
- *              （#131420 + 白描边 + blur），light/dark 仅触发按钮底色差异。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -37,9 +35,9 @@ const TYPE_META: Record<string, { icon: string; tone: string }> = {
 /** 轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 60_000;
 
-/** 触发按钮配色（暗色主题下两种宿主仅底色质感差异：dark 纯白玻璃 / light 描边玻璃） */
+/** 触发按钮配色（浅色顶栏 / 深色侧边栏两种宿主环境） */
 const BELL_STYLES = {
-  light: "border border-white/10 bg-white/[0.06] text-neutral-400 hover:text-white",
+  light: "border border-black/5 bg-white text-neutral-500 shadow-sm hover:text-brand",
   dark: "bg-white/10 text-neutral-300 hover:bg-white/15 hover:text-white",
 } as const;
 
@@ -166,17 +164,17 @@ export function NotificationBell({ variant = "light" }: { variant?: "light" | "d
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl border border-white/10 bg-[#131420]/95 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+        <div className="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-lg">
+          <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
             <span className="text-sm font-medium">通知</span>
             {unread > 0 && (
-              <button type="button" onClick={onReadAll} className="text-xs text-neutral-400 transition-colors hover:text-brand-strong">
+              <button type="button" onClick={onReadAll} className="text-xs text-neutral-500 transition-colors hover:text-brand">
                 全部已读
               </button>
             )}
           </div>
           {items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">暂无通知</p>
+            <p className="px-4 py-8 text-center text-sm text-neutral-400">暂无通知</p>
           ) : (
             <ul className="max-h-80 overflow-y-auto">
               {items.map((item) => {
@@ -186,16 +184,16 @@ export function NotificationBell({ variant = "light" }: { variant?: "light" | "d
                     <button
                       type="button"
                       onClick={() => void onItemClick(item)}
-                      className={`flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-white/5 ${item.readAt ? "opacity-60" : ""}`}
+                      className={`flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-neutral-50 ${item.readAt ? "opacity-60" : ""}`}
                     >
                       <span className="mt-0.5 shrink-0 text-sm">{meta.icon}</span>
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate text-sm ${item.readAt ? "font-normal text-neutral-400" : "font-medium text-white"}`}>
+                        <span className={`block truncate text-sm ${item.readAt ? "font-normal text-neutral-600" : "font-medium text-neutral-900"}`}>
                           {item.title}
                           {!item.readAt && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />}
                         </span>
-                        {item.body && <span className="mt-0.5 block text-xs leading-5 text-neutral-400">{item.body}</span>}
-                        <span className="mt-1 block text-[11px] text-neutral-500">{timeAgo(item.createdAt)}</span>
+                        {item.body && <span className="mt-0.5 block text-xs leading-5 text-neutral-500">{item.body}</span>}
+                        <span className="mt-1 block text-[11px] text-neutral-400">{timeAgo(item.createdAt)}</span>
                       </span>
                     </button>
                   </li>

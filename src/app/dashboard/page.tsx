@@ -1,10 +1,10 @@
 /**
  * @file 工作台页面（项目列表，AppShell 深色侧边栏布局）
  * @description 服务端组件：未登录重定向到 /login。布局为「剪辑台」结构——
- *              深色工具面板（AppShell 侧边栏）+ 暗色工作区。工作区含：
+ *              深色工具面板（AppShell 侧边栏）+ 浅色工作区。工作区含：
  *              页头（标题 + 新建按钮）、内联统计条（项目总数/累计转写/剩余额度，
  *              非卡片式）、状态筛选标签（URL 参数驱动，滑动指示条）、
- *              玻璃拟态项目卡（白/4 底 + 白描边，转写中带扫描线动画）、分页。
+ *              封面缩略图项目卡（转写中带扫描线动画）、分页。
  *              存在转写中项目时自动每 10 秒刷新（AutoRefresh）。
  */
 import Link from "next/link";
@@ -124,11 +124,11 @@ export default async function DashboardPage({
             <p className="text-2xl font-semibold tabular-nums leading-none">{counts.all}</p>
             <p className="mt-1.5 text-xs text-neutral-400">个项目</p>
           </div>
-          <div className="border-l border-white/10 pl-10">
+          <div className="border-l border-neutral-200 pl-10">
             <p className="text-2xl font-semibold tabular-nums leading-none">{formatSecondsLabel(totalDuration)}</p>
             <p className="mt-1.5 text-xs text-neutral-400">累计转写</p>
           </div>
-          <div className="border-l border-white/10 pl-10">
+          <div className="border-l border-neutral-200 pl-10">
             <p className="text-2xl font-semibold tabular-nums leading-none text-brand">
               {formatSecondsLabel(user.balanceSeconds)}
             </p>
@@ -151,9 +151,9 @@ export default async function DashboardPage({
           <div className="mt-8">
             {counts.all === 0 ? (
               // 从未有过项目：引导上传
-              <div className="flex min-h-[380px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-white/10 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand/15">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-brand-strong" aria-hidden>
+              <div className="flex min-h-[380px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-neutral-900">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white" aria-hidden>
                     <path d="M8 5.5v13a.7.7 0 0 0 1.07.6l10.2-6.5a.7.7 0 0 0 0-1.2L9.07 4.9A.7.7 0 0 0 8 5.5Z" />
                   </svg>
                 </div>
@@ -185,7 +185,7 @@ export default async function DashboardPage({
               <li key={p.id}>
                 <Link
                   href={`/project/${p.id}`}
-                  className="group flex gap-4 rounded-xl border border-white/[0.06] bg-white/[0.04] p-3 transition-all hover:border-brand/40 hover:bg-white/[0.06] hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)] motion-reduce:transition-none"
+                  className="group flex gap-4 rounded-xl border border-neutral-200/80 bg-white p-3 transition-all hover:border-brand/40 hover:shadow-md motion-reduce:transition-none"
                 >
                   {/* 封面（监视器一帧 / 占位 + 扫描线 + 时长角标） */}
                   <div className="w-28 shrink-0 sm:w-44">
@@ -221,12 +221,12 @@ export default async function DashboardPage({
             {page > 1 ? (
               <Link
                 href={pageHref(page - 1)}
-                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 transition-colors hover:border-white/25"
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 transition-colors hover:border-neutral-300"
               >
                 上一页
               </Link>
             ) : (
-              <span className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-1.5 text-neutral-600">
+              <span className="rounded-lg border border-neutral-100 bg-neutral-100 px-3 py-1.5 text-neutral-300">
                 上一页
               </span>
             )}
@@ -236,12 +236,12 @@ export default async function DashboardPage({
             {page < totalPages ? (
               <Link
                 href={pageHref(page + 1)}
-                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 transition-colors hover:border-white/25"
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 transition-colors hover:border-neutral-300"
               >
                 下一页
               </Link>
             ) : (
-              <span className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-1.5 text-neutral-600">
+              <span className="rounded-lg border border-neutral-100 bg-neutral-100 px-3 py-1.5 text-neutral-300">
                 下一页
               </span>
             )}

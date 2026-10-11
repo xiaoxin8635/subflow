@@ -34,8 +34,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <AppShell active="projects" phone={user.phone} balanceSeconds={user.balanceSeconds}>
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        <div className="text-sm text-neutral-400">
-          <Link href="/dashboard" className="transition-colors hover:text-brand-strong">
+        <div className="text-sm text-neutral-500">
+          <Link href="/dashboard" className="transition-colors hover:text-brand">
             ← 返回项目列表
           </Link>
         </div>
