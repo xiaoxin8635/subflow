@@ -1,6 +1,7 @@
 /* =====================================================================
  * SubFlow 全局样式（Tailwind CSS v4）
- * 定义品牌色板与主题变量，页面统一通过 Tailwind 工具类引用。
+ * 定义品牌色板与主题变量，页面统一通过 Tailwind 工具类引用；
+ * 另含工作台封面扫描线动画（cover-scanline，尊重 reduced-motion）。
  * ===================================================================== */
 @import "tailwindcss";
 
@@ -32,4 +33,33 @@ body {
     "Microsoft YaHei",
     Arial,
     sans-serif;
+}
+
+/* 转写中项目封面的「扫描线」：一条微光横线自上而下循环，暗示逐帧读取中
+   （尊重系统减弱动效设置） */
+@keyframes cover-scan {
+  0% {
+    top: -8%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    top: 104%;
+    opacity: 0;
+  }
+}
+
+.cover-scanline {
+  animation: cover-scan 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-scanline {
+    animation: none;
+  }
 }

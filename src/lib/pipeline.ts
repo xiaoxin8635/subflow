@@ -1,6 +1,6 @@
 /**
  * @file 项目处理流水线（Redis 队列驱动，Worker 消费）
- * @description 状态机：UPLOADED → TRANSCRIBING（抽音频+ASR）→ POLISHING（LLM 润色）
+ * @description 状态机：UPLOADED → TRANSCRIBING（封面抽帧+抽音频+ASR）→ POLISHING（LLM 润色）
  *              → READY / FAILED（原因写入 Project.error）。
  *              入口 startProcessing 仅负责入队（BullMQ 转写队列）；Redis 不可用时
  *              降级为进程内直跑（job 未入队，无重复风险）。
@@ -13,8 +13,8 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { db } from "@/lib/db";
 import { notify } from "@/lib/notify";
-import { extractAudioToMp3, probeDurationSec } from "@/lib/media";
-import { ensureLocalVideo, publicUrlFor } from "@/lib/storage";
+import { extractAudioToMp3, extractCoverFrame, probeDurationSec } from "@/lib/media";
+import { coverKeyFor, ensureLocalVideo, publicUrlFor, uploadCover } from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
 import { polishSegments } from "@/lib/polish";
@@ -71,6 +71,20 @@ export async function processProject(projectId: string): Promise<void> {
       throw new Error(`媒体时长 ${Math.round(durationSec / 60)} 分钟，超过上限 ${MAX_VIDEO_DURATION_SEC / 60} 分钟`);
     }
     await db.project.update({ where: { id: projectId }, data: { durationSec } });
+
+    // ①′ 封面帧（工作台缩略图）：旁路执行，失败仅记日志不阻断转写主流程
+    if (project.mediaKind !== "audio") {
+      try {
+        const tmpCover = path.join(os.tmpdir(), `subflow-cover-${projectId}.jpg`);
+        await extractCoverFrame(videoPath, tmpCover, Math.min(1, durationSec * 0.25));
+        const coverKey = coverKeyFor(projectId);
+        await uploadCover(coverKey, tmpCover);
+        await db.project.update({ where: { id: projectId }, data: { coverKey } });
+        await fs.unlink(tmpCover).catch(() => {});
+      } catch (e) {
+        console.warn(`[pipeline] 项目 ${projectId} 封面抽帧失败（不影响转写）：`, e instanceof Error ? e.message : e);
+      }
+    }
 
     // ② 抽取音频（16kHz 单声道 mp3）
     await extractAudioToMp3(videoPath, tmpAudio);

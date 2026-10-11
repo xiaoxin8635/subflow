@@ -70,6 +70,10 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **P2.8 加油包**（`docs/ROADMAP.md` 第三期）：一次性时长包三档（¥9.9/1 小时、
       ¥29.9/200 分钟、¥49.9/400 分钟，单价递减），购买页展示 + 后台档位快捷发码，
       兑换链路复用时长码零改动
+- [x] **P2.9 工作台改版**：「剪辑台」设计母题——登录后统一深色侧边栏外壳
+      （桌面侧栏/移动横滑标签栏），项目卡片带封面缩略图（转写时旁路抽帧，失败不阻断）、
+      时长角标与字幕条状态徽章；状态筛选（URL 驱动 + 滑动指示条）、
+      进行中项目 10 秒自动刷新、内联统计条
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -284,6 +288,36 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   `/admin` 发码表单「加油包」模式按档位本地折算 `seconds` 提交（生成即对应档位时长码）
 - **兑换**：与时长码同链路（`/dashboard/redeem` → `POST /api/redeem`），
   额度直接进余额（`REDEEM_BONUS` 流水），转写/导出/翻译通用；重复兑换 409
+
+### 工作台改版说明（P2.9）
+
+- **设计母题「剪辑台」**：创作者的视觉母语是剪辑软件（剪映/PR/达芬奇的深色工具面板 +
+  浅色画面区），登录后页面统一套 [src/components/app-shell.tsx](src/components/app-shell.tsx)
+  深色侧边栏外壳（桌面 ≥lg 左侧固定 240px；窄屏收纳为顶部横向滚动标签栏），
+  当前项左侧 brand 色竖条高亮；底部用户区含剩余额度、脱敏手机号、通知铃铛（dark 配色）
+  与退出登录；营销页与项目详情页（编辑器需全宽）仍用 SiteHeader 不套外壳
+- **项目卡片（监视器轨道语言）**：封面缩略图（视频项目转写时自动抽帧，音频项目渲染
+  波形占位图）、右下角时长角标（播放器 UI 惯例）、状态徽章为「字幕条」样式
+  （黑底白字小圆角；转写/润色中为 brand 色底 + 呼吸点动画）
+- **封面抽帧链路**：`Project.coverKey`（`covers/{projectId}.jpg` 固定 key，重转写覆盖写）
+  → [src/lib/media.ts](src/lib/media.ts) `extractCoverFrame`（取 25% 处帧避开开头黑场，
+  缩放 640px 宽）→ [src/lib/storage.ts](src/lib/storage.ts) `uploadCover`
+  （local 落盘 `uploads/covers/` / oss 上传）→ `GET /api/projects/[id]/cover`
+  鉴权输出（local 流式 + 私有缓存头 / oss 302 签名 URL 4h）。
+  抽帧为旁路执行：失败仅记日志，绝不阻断转写主流程；音频项目与无视频轨跳过；
+  项目删除联动清理封面文件
+- **状态筛选**（[src/components/filter-tabs.tsx](src/components/filter-tabs.tsx)）：
+  全部/进行中/已完成/失败四档，URL 参数驱动（`?status=`，可分享/刷新保持），
+  滑动指示条动画（`useLayoutEffect` 测量 + 双 rAF 兜底字体重排），
+  每档带实时计数；`prefers-reduced-motion` 下关过渡
+- **自动刷新**（[src/components/auto-refresh.tsx](src/components/auto-refresh.tsx)）：
+  列表存在进行中项目时服务端条件渲染该组件，10 秒轮询 `router.refresh()`；
+  页面不可见时跳过；项目全部到终态后组件不再渲染、轮询自然停止
+- **统计条**：内联数字（项目数 / 累计转写 / 剩余额度）代替 SaaS 卡片套件，
+  余额展示复用 [src/lib/format.ts](src/lib/format.ts) `formatSecondsLabel`
+  （「X 小时 Y 分钟」）
+- **退出登录**：桌面侧边栏底部整行按钮 + 移动端标签栏末尾紧凑入口
+  （[src/components/logout-button.tsx](src/components/logout-button.tsx)）
 
 ### CI 说明（P1.7）
 

@@ -137,6 +137,7 @@ model Project {
   status      ProjectStatus @default(UPLOADED)
   mediaKind   String        @default("video") // 媒体类型：video（视频）/ audio（纯音频，P2.1 音频直传）
   videoKey    String? // 对象存储 key（生产：COS/OSS；本地：uploads/ 相对路径；音频也存此字段，历史命名）
+  coverKey    String? // 封面帧存储 key（covers/{projectId}.jpg，转写时从视频抽帧生成，工作台缩略图用；音频项目与抽帧失败时为空）
   videoName   String? // 原始文件名
   durationSec Float? // 媒体时长（秒），由 FFmpeg 探测
   error       String? // 流水线失败原因（status=FAILED 时展示给用户）

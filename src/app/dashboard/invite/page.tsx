@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { ensureInviteCode } from "@/lib/invite";
 import { INVITE_REWARD_INVITER_SECONDS, INVITE_REWARD_INVITEE_SECONDS } from "@/lib/constants";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/app-shell";
 import { InviteActions } from "./invite-actions";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
@@ -48,13 +48,11 @@ export default async function InvitePage() {
   const totalReward = agg._sum.bonusInviterSec ?? 0;
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50">
-      <SiteHeader />
-
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
+    <AppShell active="invite" phone={user.phone} balanceSeconds={user.balanceSeconds}>
+      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">邀请好友</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">邀请好友</h1>
             <p className="mt-1 text-sm text-neutral-500">
               把邀请码分享给朋友，注册时填写即可双方得额度
             </p>
@@ -120,7 +118,7 @@ export default async function InvitePage() {
             </ul>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

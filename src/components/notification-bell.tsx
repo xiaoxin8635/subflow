@@ -5,8 +5,8 @@
  * @description 客户端组件：60 秒轮询 GET /api/notifications 展示未读红点，
  *              点击打开下拉列表（最近 30 条），点条目标记已读并跳转 link，
  *              支持「全部已读」。tab 可见时立即刷新一次（回页即见最新）。
- *              挂载点：dashboard 与 project 详情页的顶栏（SiteHeader 为静态
- *              服务端组件，无登录态感知，铃铛按页挂载）。
+ *              挂载点：AppShell 侧边栏（variant="dark"）与 project 详情页顶栏
+ *              （默认浅色），两种宿主配色由 BELL_STYLES 区分。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -35,6 +35,12 @@ const TYPE_META: Record<string, { icon: string; tone: string }> = {
 /** 轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 60_000;
 
+/** 触发按钮配色（浅色顶栏 / 深色侧边栏两种宿主环境） */
+const BELL_STYLES = {
+  light: "border border-black/5 bg-white text-neutral-500 shadow-sm hover:text-brand",
+  dark: "bg-white/10 text-neutral-300 hover:bg-white/15 hover:text-white",
+} as const;
+
 /**
  * 相对时间显示（如「3 分钟前」）
  * @param iso ISO 时间字符串
@@ -47,8 +53,11 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("zh-CN");
 }
 
-/** 铃铛组件入口 */
-export function NotificationBell() {
+/**
+ * 铃铛组件入口
+ * @param variant 宿主配色：light 浅色顶栏（默认）/ dark 深色侧边栏
+ */
+export function NotificationBell({ variant = "light" }: { variant?: "light" | "dark" }) {
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -140,7 +149,7 @@ export function NotificationBell() {
           setOpen((v) => !v);
           if (!open) void refresh();
         }}
-        className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-black/5 bg-white text-neutral-500 shadow-sm transition-colors hover:text-brand"
+        className={`relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${BELL_STYLES[variant]}`}
       >
         {/* 铃铛图标 */}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

@@ -1,7 +1,8 @@
 /**
  * @file 媒体处理工具（基于 ffmpeg-static / ffprobe-static 自带二进制）
  * @description 提供：时长探测、音频抽取（16kHz 单声道 mp3，供 ASR）、
- *              语音段检测（silencedetect，供同步 ASR 文本对齐时间戳）、音频切片。
+ *              封面帧抽取（工作台缩略图）、语音段检测（silencedetect，
+ *              供同步 ASR 文本对齐时间戳）、音频切片。
  *              所有命令均为 Windows/Linux 兼容的 execFile 调用（不经过 shell，无注入风险）。
  */
 import { execFile } from "node:child_process";
@@ -60,6 +61,32 @@ export async function extractAudioToMp3(videoPath: string, outMp3: string): Prom
   await execFileAsync(
     FFMPEG,
     ["-y", "-i", videoPath, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", outMp3],
+    { maxBuffer: MAX_BUFFER },
+  );
+}
+
+/**
+ * 从视频抽取一帧作为封面（工作台缩略图）：640px 宽 JPEG（保持宽高比，高度偶数对齐）
+ * @param videoPath 视频路径
+ * @param outJpg    输出 JPEG 路径
+ * @param atSec     取帧时刻（秒）；建议 min(1, 时长×0.25)——整秒处取帧避开开头黑场，短视频取前 1/4 段
+ */
+export async function extractCoverFrame(
+  videoPath: string,
+  outJpg: string,
+  atSec: number,
+): Promise<void> {
+  await execFileAsync(
+    FFMPEG,
+    [
+      "-y",
+      "-ss", Math.max(0, atSec).toFixed(3),
+      "-i", videoPath,
+      "-frames:v", "1",
+      "-vf", "scale=640:-2",
+      "-q:v", "3",
+      outJpg,
+    ],
     { maxBuffer: MAX_BUFFER },
   );
 }

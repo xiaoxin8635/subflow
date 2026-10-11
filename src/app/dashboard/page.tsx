@@ -1,16 +1,23 @@
 /**
- * @file 工作台页面（项目列表）
- * @description 服务端组件：未登录重定向到 /login；已登录显示脱敏手机号、剩余额度
- *              与项目列表（含状态徽章/时长/失败原因），支持 ?page=N 分页（每页 20 条）。
- *              上传入口跳 /dashboard/new。
+ * @file 工作台页面（项目列表，AppShell 深色侧边栏布局）
+ * @description 服务端组件：未登录重定向到 /login。布局为「剪辑台」结构——
+ *              深色工具面板（AppShell 侧边栏）+ 浅色工作区。工作区含：
+ *              页头（标题 + 新建按钮）、内联统计条（项目总数/累计转写/剩余额度，
+ *              非卡片式）、状态筛选标签（URL 参数驱动，滑动指示条）、
+ *              封面缩略图项目卡（转写中带扫描线动画）、分页。
+ *              存在转写中项目时自动每 10 秒刷新（AutoRefresh）。
  */
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentUser, maskPhone } from "@/lib/auth";
+import type { ProjectStatus } from "@prisma/client";
+import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { SiteHeader } from "@/components/site-header";
-import { NotificationBell } from "@/components/notification-bell";
-import { ProjectStatusBadge, formatDuration } from "@/components/project-status";
+import { formatSecondsLabel } from "@/lib/format";
+import { AppShell } from "@/components/app-shell";
+import { ProjectStatusBadge } from "@/components/project-status";
+import { ProjectCover } from "@/components/project-cover";
+import { FilterTabs, type StatusFilter } from "@/components/filter-tabs";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
 export const instant = false;
@@ -18,111 +25,188 @@ export const instant = false;
 /** 每页项目数 */
 const PAGE_SIZE = 20;
 
-/** 秒数格式化为「X 小时 Y 分钟」 */
-function formatSeconds(total: number): string {
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`;
-  if (minutes > 0) return `${minutes} 分钟`;
-  return `${total} 秒`;
-}
+/** 「进行中」状态集合（筛选与轮询判定共用） */
+const ACTIVE_STATUSES: ProjectStatus[] = ["UPLOADED", "TRANSCRIBING", "POLISHING"];
+
+/** 筛选参数 → Prisma where 条件的 status 部分 */
+const STATUS_WHERE: Record<Exclude<StatusFilter, "">, { status: { in: ProjectStatus[] } | ProjectStatus }> = {
+  active: { status: { in: ACTIVE_STATUSES } },
+  ready: { status: "READY" },
+  failed: { status: "FAILED" },
+};
 
 /** 工作台入口组件 */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string | string[] }>;
+  searchParams: Promise<{ page?: string | string[]; status?: string | string[] }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // 解析页码（非法值回退第 1 页）
-  const rawPage = await searchParams;
-  const pageParam = Array.isArray(rawPage.page) ? rawPage.page[0] : rawPage.page;
+  // 解析页码与筛选（非法值回退默认）
+  const raw = await searchParams;
+  const pageParam = Array.isArray(raw.page) ? raw.page[0] : raw.page;
   const page = Math.max(1, Math.floor(Number(pageParam) || 1));
+  const rawStatus = Array.isArray(raw.status) ? raw.status[0] : raw.status;
+  const status: StatusFilter =
+    rawStatus === "active" || rawStatus === "ready" || rawStatus === "failed" ? rawStatus : "";
 
-  const [total, projects] = await Promise.all([
-    db.project.count({ where: { userId: user.id } }),
+  const where = { userId: user.id, ...(status ? STATUS_WHERE[status] : {}) };
+
+  const [total, projects, byStatus, durationAgg] = await Promise.all([
+    db.project.count({ where }),
     db.project.findMany({
-      where: { userId: user.id },
+      where,
       orderBy: { updatedAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        mediaKind: true,
+        coverKey: true,
+        durationSec: true,
+        error: true,
+        updatedAt: true,
+      },
     }),
+    // 各状态计数（筛选标签上的角标；与当前筛选无关，反映全量）
+    db.project.groupBy({ by: ["status"], where: { userId: user.id }, _count: { _all: true } }),
+    // 累计转写时长（统计条）
+    db.project.aggregate({ where: { userId: user.id }, _sum: { durationSec: true } }),
   ]);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  return (
-    <div className="flex min-h-screen flex-col bg-neutral-50">
-      <SiteHeader />
+  // 状态计数归并（groupBy 只返回存在的状态）
+  const countOf = (s: ProjectStatus) => byStatus.find((r) => r.status === s)?._count._all ?? 0;
+  const counts = {
+    all: byStatus.reduce((acc, r) => acc + r._count._all, 0),
+    active: ACTIVE_STATUSES.reduce((acc, s) => acc + countOf(s), 0),
+    ready: countOf("READY"),
+    failed: countOf("FAILED"),
+  };
+  const hasActive = counts.active > 0;
+  const totalDuration = durationAgg._sum.durationSec ?? 0;
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10">
-        {/* 用户信息条 */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+  /** 分页链接构造（保留当前筛选） */
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/dashboard?${qs}` : "/dashboard";
+  };
+
+  return (
+    <AppShell active="projects" phone={user.phone} balanceSeconds={user.balanceSeconds}>
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:py-10">
+        {hasActive && <AutoRefresh intervalSec={10} />}
+
+        {/* 页头 */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">我的项目</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">我的项目</h1>
             <p className="mt-1 text-sm text-neutral-500">上传视频，AI 自动生成字幕</p>
           </div>
-          <div className="flex items-center gap-4">
-            <NotificationBell />
-            <div className="rounded-xl border border-black/5 bg-white px-4 py-2 text-sm shadow-sm">
-              <span className="text-neutral-500">{maskPhone(user.phone)}</span>
-              <span className="mx-2 text-neutral-300">|</span>
-              <span className="font-medium text-brand">
-                剩余额度 {formatSeconds(user.balanceSeconds)}
-              </span>
-              <span className="mx-2 text-neutral-300">|</span>
-              <Link href="/pricing" className="text-neutral-500 transition-colors hover:text-brand">
-                购买额度
-              </Link>
-              <span className="mx-2 text-neutral-300">|</span>
-              <Link href="/dashboard/redeem" className="text-neutral-500 transition-colors hover:text-brand">
-                兑换额度
-              </Link>
-              <span className="mx-2 text-neutral-300">|</span>
-              <Link href="/dashboard/invite" className="text-neutral-500 transition-colors hover:text-brand">
-                邀请好友
-              </Link>
-            </div>
-            <Link
-              href="/dashboard/new"
-              className="rounded-xl bg-brand px-5 py-2.5 font-medium text-white transition-colors hover:bg-brand-strong"
-            >
-              + 新建项目
-            </Link>
+          <Link
+            href="/dashboard/new"
+            className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all hover:-translate-y-px hover:bg-brand-strong motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+          >
+            新建项目
+          </Link>
+        </div>
+
+        {/* 内联统计条：数字即界面，不做卡片（累计时长不区分筛选，余额直达兑换） */}
+        <div className="mt-6 flex flex-wrap items-end gap-x-10 gap-y-4">
+          <div>
+            <p className="text-2xl font-semibold tabular-nums leading-none">{counts.all}</p>
+            <p className="mt-1.5 text-xs text-neutral-400">个项目</p>
           </div>
+          <div className="border-l border-neutral-200 pl-10">
+            <p className="text-2xl font-semibold tabular-nums leading-none">{formatSecondsLabel(totalDuration)}</p>
+            <p className="mt-1.5 text-xs text-neutral-400">累计转写</p>
+          </div>
+          <div className="border-l border-neutral-200 pl-10">
+            <p className="text-2xl font-semibold tabular-nums leading-none text-brand">
+              {formatSecondsLabel(user.balanceSeconds)}
+            </p>
+            <p className="mt-1.5 text-xs text-neutral-400">
+              剩余额度 ·{" "}
+              <Link href="/dashboard/redeem" className="text-neutral-500 underline-offset-2 hover:text-brand hover:underline">
+                兑换
+              </Link>
+            </p>
+          </div>
+        </div>
+
+        {/* 状态筛选（滑动指示条） */}
+        <div className="mt-8">
+          <FilterTabs current={status} counts={counts} />
         </div>
 
         {/* 项目列表 / 空状态 */}
         {projects.length === 0 ? (
-          <div className="mt-10 flex min-h-[400px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-200 bg-white text-center">
-            <div className="text-5xl">🎬</div>
-            <p className="mt-4 font-medium">还没有项目</p>
-            <p className="mt-1 text-sm text-neutral-500">
-              点击「新建项目」上传第一个视频，AI 将自动生成字幕
-            </p>
+          <div className="mt-8">
+            {counts.all === 0 ? (
+              // 从未有过项目：引导上传
+              <div className="flex min-h-[380px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-neutral-900">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white" aria-hidden>
+                    <path d="M8 5.5v13a.7.7 0 0 0 1.07.6l10.2-6.5a.7.7 0 0 0 0-1.2L9.07 4.9A.7.7 0 0 0 8 5.5Z" />
+                  </svg>
+                </div>
+                <p className="mt-4 font-medium">还没有项目</p>
+                <p className="mt-1 text-sm text-neutral-500">上传第一个视频，AI 自动生成字幕</p>
+                <Link
+                  href="/dashboard/new"
+                  className="mt-5 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+                >
+                  新建项目
+                </Link>
+              </div>
+            ) : (
+              // 筛选无结果：给出回到全部的出口
+              <div className="flex min-h-[240px] flex-col items-center justify-center text-center">
+                <p className="text-sm text-neutral-500">没有符合筛选的项目</p>
+                <Link
+                  href="/dashboard"
+                  className="mt-3 text-sm font-medium text-brand underline-offset-2 hover:underline"
+                >
+                  查看全部
+                </Link>
+              </div>
+            )}
           </div>
         ) : (
-          <ul className="mt-8 space-y-3">
+          <ul className="mt-6 space-y-3">
             {projects.map((p) => (
               <li key={p.id}>
                 <Link
                   href={`/project/${p.id}`}
-                  className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-black/5 bg-white px-5 py-4 shadow-sm transition-shadow hover:shadow-md"
+                  className="group flex gap-4 rounded-xl border border-neutral-200/80 bg-white p-3 transition-all hover:border-brand/40 hover:shadow-md motion-reduce:transition-none"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{p.title}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">
+                  {/* 封面（监视器一帧 / 占位 + 扫描线 + 时长角标） */}
+                  <div className="w-28 shrink-0 sm:w-44">
+                    <ProjectCover
+                      projectId={p.id}
+                      coverKey={p.coverKey}
+                      mediaKind={p.mediaKind}
+                      durationSec={p.durationSec}
+                      status={p.status}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 self-center">
+                    <p className="truncate font-medium transition-colors group-hover:text-brand">{p.title}</p>
+                    <p className="mt-1 text-xs tabular-nums text-neutral-400">
                       {new Date(p.updatedAt).toLocaleString("zh-CN", { hour12: false })}
                     </p>
                     {p.status === "FAILED" && p.error && (
-                      <p className="mt-1 truncate text-xs text-red-500">失败原因：{p.error}</p>
+                      <p className="mt-1.5 truncate text-xs text-red-500">失败原因：{p.error}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    {p.durationSec != null && (
-                      <span className="text-neutral-500">{formatDuration(p.durationSec)}</span>
-                    )}
+                  <div className="self-center pr-1">
                     <ProjectStatusBadge status={p.status} />
                   </div>
                 </Link>
@@ -133,10 +217,10 @@ export default async function DashboardPage({
 
         {/* 分页控件（多于 1 页时展示） */}
         {totalPages > 1 && (
-          <nav className="mt-8 flex items-center justify-center gap-2 text-sm">
+          <nav className="mt-8 flex items-center justify-center gap-2 text-sm" aria-label="分页">
             {page > 1 ? (
               <Link
-                href={`/dashboard?page=${page - 1}`}
+                href={pageHref(page - 1)}
                 className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 transition-colors hover:border-neutral-300"
               >
                 上一页
@@ -146,12 +230,12 @@ export default async function DashboardPage({
                 上一页
               </span>
             )}
-            <span className="px-2 text-neutral-500">
-              第 {page} / {totalPages} 页 · 共 {total} 个项目
+            <span className="px-2 tabular-nums text-neutral-500">
+              第 {page} / {totalPages} 页 · 共 {total} 个
             </span>
             {page < totalPages ? (
               <Link
-                href={`/dashboard?page=${page + 1}`}
+                href={pageHref(page + 1)}
                 className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 transition-colors hover:border-neutral-300"
               >
                 下一页
@@ -163,7 +247,7 @@ export default async function DashboardPage({
             )}
           </nav>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

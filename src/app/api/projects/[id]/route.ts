@@ -2,13 +2,13 @@
  * @file /api/projects/[id] — 项目详情接口
  * @description
  *   GET：项目详情（READY 时附带转写分段）；仅本人可见，不存在/非本人统一返回 404。
- *   DELETE：删除项目（级联删除转写记录，同时清理当前驱动下的源视频与导出产物）。
+ *   DELETE：删除项目（级联删除转写记录，同时清理当前驱动下的源视频、封面帧与导出产物）。
  * 说明：Next.js 15+ 动态路由参数为 Promise，必须 await。
  */
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { removeVideo, removeExportArtifact } from "@/lib/storage";
+import { removeVideo, removeCover, removeExportArtifact } from "@/lib/storage";
 import { transcribeQueuePosition } from "@/lib/queue/queues";
 
 /**
@@ -90,6 +90,7 @@ export async function DELETE(
   await db.project.delete({ where: { id } }); // transcript/exportTask 由 onDelete: Cascade 级联删除
   // 级联删除不会清理存储对象，这里逐个删除防孤儿文件（含 oss 模式的本地缓存副本）
   if (project.videoKey) await removeVideo(project.videoKey);
+  if (project.coverKey) await removeCover(project.coverKey);
   await Promise.all(exportFiles.map((t) => removeExportArtifact(t.outputKey!)));
 
   return NextResponse.json({ ok: true });

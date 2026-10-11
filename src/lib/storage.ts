@@ -6,12 +6,13 @@
  *              上层（上传 API / 流水线 / ASR provider）只依赖本模块的统一接口，
  *              不感知存储介质。对象 key 语义：
  *                - local 模式源视频 key = {uuid}{ext}（历史数据兼容，无目录前缀）
- *                - oss   模式源视频 key = videos/{uuid}{ext}；成片 key 两种模式一致 = exports/{taskId}.mp4
+ *                - oss   模式源视频 key = videos/{uuid}{ext}；成片 key 两种模式一致 = exports/{taskId}.mp4；
+ *                  封面帧 key 两种模式一致 = covers/{projectId}.jpg
  */
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { ossDelete, ossDownloadToFile, presignGetUrl } from "@/lib/oss";
+import { ossDelete, ossDownloadToFile, ossUploadFile, presignGetUrl } from "@/lib/oss";
 
 /** 上传目录（相对项目根，可用 LOCAL_UPLOAD_DIR 覆盖） */
 const LOCAL_UPLOAD_DIR = process.env.LOCAL_UPLOAD_DIR ?? "./uploads";
@@ -121,6 +122,42 @@ export async function removeExportArtifact(outputKey: string): Promise<void> {
     return;
   }
   await fs.promises.unlink(exportAbsPath(outputKey)).catch(() => {});
+}
+
+/**
+ * 生成封面帧存储 key（与成片 exports/ 同一命名体系：按项目 ID 固定，
+ * 重转写时覆盖写同 key，无需清理旧帧）
+ * @param projectId 项目 ID
+ */
+export function coverKeyFor(projectId: string): string {
+  return `covers/${projectId}.jpg`;
+}
+
+/**
+ * 上传封面帧到当前驱动（local：uploads/covers/ 落盘；oss：上传对象）
+ * @param coverKey 封面 key（coverKeyFor 生成）
+ * @param absPath  本地临时 JPEG 绝对路径
+ */
+export async function uploadCover(coverKey: string, absPath: string): Promise<void> {
+  if (isOss()) {
+    await ossUploadFile(coverKey, absPath, "image/jpeg");
+    return;
+  }
+  const dest = localPathByKey(coverKey);
+  await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+  await fs.promises.copyFile(absPath, dest);
+}
+
+/**
+ * 删除封面帧（当前驱动；不存在静默通过）
+ * @param coverKey 封面 key
+ */
+export async function removeCover(coverKey: string): Promise<void> {
+  if (isOss()) {
+    await ossDelete(coverKey).catch(() => {});
+    return;
+  }
+  await fs.promises.unlink(localPathByKey(coverKey)).catch(() => {});
 }
 
 /**
