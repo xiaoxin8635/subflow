@@ -2,10 +2,11 @@
  * @file 字幕文件下载共享逻辑（P1.4 多格式导出）
  * @description SRT/VTT/ASS 三个下载接口共用的鉴权、项目加载与分段校验；
  *              统一错误语义：未登录 401、不存在/非本人 404（防项目 ID 探测）、
- *              未完成转写或无字幕内容 409。
+ *              未完成转写或无字幕内容 409。另含双语合并工具（打包下载共用）。
  */
 import { db } from "@/lib/db";
 import type { StoredSegment } from "@/lib/asr/types";
+import type { TranslatedSegment } from "@/lib/translate-pipeline";
 
 /** 校验结果：成功携带项目与合法分段 */
 export type LoadedSubtitles =
@@ -59,5 +60,26 @@ export function subtitleAttachment(body: string, title: string, ext: string, mim
       "Content-Disposition": `attachment; filename="subtitles.${ext}"; filename*=UTF-8''${filename}`,
       "Cache-Control": "no-store",
     },
+  });
+}
+
+/**
+ * 双语文本合并（SRT/VTT 用）：按索引把译文以真实换行并入原文文本
+ * （P2.4 保证原文与译文行数/时间轴逐行一致）
+ * @param source    原文字幕分段
+ * @param translated 译文分段
+ * @returns 合并后的分段（text = 原文\n译文；译文缺失的行退化为原文）
+ */
+export function mergeBilingual(
+  source: StoredSegment[],
+  translated: TranslatedSegment[],
+): { start: number; end: number; text: string }[] {
+  return source.map((s, i) => {
+    const transText = typeof translated[i]?.text === "string" ? translated[i]!.text.trim() : "";
+    return {
+      start: s.start,
+      end: s.end,
+      text: transText ? `${s.text}\n${transText}` : s.text,
+    };
   });
 }

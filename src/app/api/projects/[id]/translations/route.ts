@@ -114,7 +114,9 @@ export async function POST(
 
 /**
  * 列出项目的全部翻译任务（编辑器翻译卡展示各语言状态用）
- * @param params 路由参数（Promise<{ id: string }>）
+ * @param request 请求（query 可选 withSegments=1：DONE 任务附带 segments，
+ *                供编辑器双语预览；缺省不含大字段）
+ * @param params  路由参数（Promise<{ id: string }>）
  */
 export async function GET(
   request: Request,
@@ -129,6 +131,7 @@ export async function GET(
     return NextResponse.json({ error: "项目不存在" }, { status: 404 });
   }
 
+  const withSegments = new URL(request.url).searchParams.get("withSegments") === "1";
   const translations = await db.translation.findMany({
     where: { projectId: id },
     orderBy: { createdAt: "desc" },
@@ -142,7 +145,15 @@ export async function GET(
       error: true,
       createdAt: true,
       finishedAt: true,
+      ...(withSegments ? { segments: true } : {}),
     },
   });
-  return NextResponse.json({ translations });
+  // withSegments 模式下仅 DONE 任务携带译文分段（其余状态无内容，置 null 统一契约）
+  const payload = withSegments
+    ? translations.map((t) => ({
+        ...t,
+        segments: t.status === "DONE" && Array.isArray(t.segments) ? t.segments : null,
+      }))
+    : translations;
+  return NextResponse.json({ translations: payload });
 }

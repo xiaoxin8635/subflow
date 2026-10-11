@@ -114,12 +114,7 @@ export function NewUploadClient() {
   const hasInvalid = rows.some((r) => r.status === "pending" && !ACCEPT_TYPES[extOf(r.file)]);
   const oversize = (r: FileRow) => r.file.size > MAX_UPLOAD_BYTES;
   const doneCount = rows.filter((r) => r.status === "done").length;
-  // 最新 rows 镜像（latest ref）：handleUpload 为 async 长流程，结束后 pendingRows()
-  // 若读 state 闭包会拿到点击时刻的旧值（全部仍 pending），导致上传成功也不跳转
-  const rowsRef = useRef<FileRow[]>([]);
-  rowsRef.current = rows;
-  const pendingRows = () =>
-    rowsRef.current.filter((r) => r.status === "pending" || r.status === "canceled" || r.status === "failed");
+  const pendingRows = () => rows.filter((r) => r.status === "pending" || r.status === "canceled" || r.status === "failed");
 
   /** 追加文件（点击选择/拖拽共用）：去重、限流到 MAX_BATCH_FILES。
    *  必须传已快照的 File 数组——React 的 setState updater 延迟到渲染期才执行，
@@ -287,7 +282,11 @@ export function NewUploadClient() {
 
   /** 批量上传：串行逐个文件，单个失败不阻断；单文件成功即跳详情页，多文件完成跳列表 */
   async function handleUpload() {
-    const queue = pendingRows().filter((r) => ACCEPT_TYPES[extOf(r.file)] && !oversize(r));
+    // 点击时刻的快照：pendingRows() 此处读闭包 state 是准确的（事件触发时渲染已提交）。
+    // queue 之外被跳过的 pending 行（格式不支持/超限）不会参与循环，也不应触发自动跳转
+    const beforePending = pendingRows();
+    const queue = beforePending.filter((r) => ACCEPT_TYPES[extOf(r.file)] && !oversize(r));
+    const skippedCount = beforePending.length - queue.length;
     if (uploading || queue.length === 0) return;
     setUploading(true);
     setSummary(null);
@@ -325,7 +324,8 @@ export function NewUploadClient() {
       setSummary("上传已取消，未完成文件可从断点继续");
       return;
     }
-    if (failCount === 0 && !pendingRows().length) {
+    // skippedCount 用点击时快照而非实时 pendingRows()——async 循环后闭包 state 是旧值
+    if (failCount === 0 && skippedCount === 0) {
       if (lastProjectId && queue.length === 1) {
         router.push(`/project/${lastProjectId}`);
       } else {

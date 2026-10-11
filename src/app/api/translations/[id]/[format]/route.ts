@@ -18,7 +18,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { buildSrt } from "@/lib/srt";
 import { buildVtt } from "@/lib/vtt";
 import { buildAss, buildBilingualAss, DEFAULT_ASS_CONFIG } from "@/lib/ass";
-import { subtitleAttachment } from "@/lib/subtitle-download";
+import { subtitleAttachment, mergeBilingual } from "@/lib/subtitle-download";
 import type { StoredSegment } from "@/lib/asr/types";
 import type { TranslatedSegment } from "@/lib/translate-pipeline";
 
@@ -102,24 +102,4 @@ export async function GET(
       )
     : buildAss(DEFAULT_ASS_CONFIG, segments);
   return subtitleAttachment(body, filename, "ass", mimeType);
-}
-
-/**
- * 双语文本合并（SRT/VTT 用）：按索引把译文以真实换行并入原文文本
- * @param source    原文字幕分段
- * @param translated 译文分段（时间轴与原文逐行对齐）
- * @returns 合并后的分段（text = 原文\n译文；译文缺失的行退化为原文）
- */
-function mergeBilingual(
-  source: StoredSegment[],
-  translated: TranslatedSegment[],
-): { start: number; end: number; text: string }[] {
-  return source.map((s, i) => {
-    const transText = typeof translated[i]?.text === "string" ? translated[i]!.text.trim() : "";
-    return {
-      start: s.start,
-      end: s.end,
-      text: transText ? `${s.text}\n${transText}` : s.text,
-    };
-  });
 }

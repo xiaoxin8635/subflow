@@ -10,15 +10,18 @@
  *         waveformKey 存在时渲染）、
  *         选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
  *         描边/高亮）、另存为我的模板、删除我的模板、保存（PUT 全量 segments）、
+ *         双语预览（存在已完成翻译时：原文/译文/双语叠加切换，仅影响预览不改数据）、
  *         导出成片（ExportCard：携带当前预览样式快照烧录，所见即所得 + 额度扣减 + 下载）。
  *   依赖 API：GET /api/projects/[id]/video、PUT /api/projects/[id]/transcript、
  *             GET /api/styles、GET/POST /api/user-styles、DELETE /api/user-styles/[id]、
- *             POST /api/projects/[id]/exports、GET /api/exports/[id]。
+ *             POST /api/projects/[id]/exports、GET /api/exports/[id]、
+ *             GET /api/projects/[id]/translations?withSegments=1（双语预览）。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SubtitleOverlay } from "@/components/subtitle-overlay";
 import { parseStyleConfig } from "@/lib/style-config";
 import type { StyleConfig } from "@/lib/style-config";
+import { TRANSLATE_LANGUAGES } from "@/lib/constants";
 import { ExportCard } from "./export-card";
 import { WaveformStrip } from "./waveform-strip";
 
@@ -47,6 +50,17 @@ const FONT_OPTIONS = [
   { value: "KaiTi", label: "楷体" },
   { value: "FangSong", label: "仿宋" },
 ] as const;
+
+/** 双语预览用的已完成翻译（GET translations?withSegments=1 中 DONE 且带分段的子集） */
+interface EditorTranslation {
+  id: string;
+  targetLang: string;
+  status: string;
+  segments?: unknown;
+}
+
+/** 叠加预览模式：原文 / 译文 / 双语（双语 = 原文\n译文 两行） */
+type PreviewMode = "source" | "target" | "bilingual";
 
 /** 秒 → mm:ss.d 展示 */
 function fmt(t: number): string {
@@ -100,6 +114,12 @@ export function SubtitleEditor({
   const [findOpen, setFindOpen] = useState(false);
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
+  // 双语预览（P2.11）：已完成翻译列表 / 当前预览语言 / 预览模式（原文-译文-双语）
+  const [translations, setTranslations] = useState<EditorTranslation[]>([]);
+  const [previewLang, setPreviewLang] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("source");
+  // 打包下载（P2.11）：zip 生成期间的按钮忙碌态
+  const [bundleBusy, setBundleBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err" | "warn"; text: string } | null>(null);
   const [containerH, setContainerH] = useState(0);
 
@@ -157,6 +177,51 @@ export function SubtitleEditor({
     () => segments.findIndex((s) => currentTime >= s.start && currentTime < s.end),
     [segments, currentTime],
   );
+
+  // 拉取已完成翻译（双语预览用）：增强功能，失败静默降级不影响编辑主流程
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/translations?withSegments=1`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as { translations?: EditorTranslation[] };
+        if (cancelled || !body.translations) return;
+        const done = body.translations.filter((t) => t.status === "DONE" && Array.isArray(t.segments));
+        setTranslations(done);
+        // 默认选中第一个译文语言；刷新后原语言仍存在则保持
+        if (done.length > 0) {
+          setPreviewLang((prev) =>
+            prev && done.some((t) => t.targetLang === prev) ? prev : done[0].targetLang,
+          );
+        }
+      } catch {
+        // 静默：双语预览缺失只影响预览增强，不提示错误
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  /** 预览模式合成的叠加层分段：译文/双语只改显示文本，不修改字幕数据本身 */
+  const previewSegment = useMemo<EditorSegment | null>(() => {
+    const cur = segments[activeIdx];
+    if (!cur) return null;
+    if (previewMode === "source" || !previewLang) return cur;
+    const tSegs = translations.find((t) => t.targetLang === previewLang)?.segments;
+    const tText = Array.isArray(tSegs)
+      ? (tSegs[activeIdx] as { text?: unknown } | undefined)?.text
+      : null;
+    if (typeof tText !== "string" || tText.length === 0) return cur;
+    return {
+      ...cur,
+      keywords: previewMode === "target" ? [] : cur.keywords,
+      text: previewMode === "target" ? tText : `${cur.text}\n${tText}`,
+    };
+  }, [segments, activeIdx, previewMode, previewLang, translations]);
 
   /** 查找词命中的分段数（查找词为空时为 0，替换按钮禁用） */
   const findMatchCount = useMemo(
@@ -359,6 +424,34 @@ export function SubtitleEditor({
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * 打包下载全部字幕产物（zip，P2.11）：请求服务端 subtitle-bundle 接口
+   * （原文三格式 + 文稿 + 已完成翻译各格式与双语），blob 触发浏览器下载
+   */
+  async function downloadBundle() {
+    if (bundleBusy) return;
+    setBundleBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/subtitle-bundle`, { cache: "no-store" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `打包失败（HTTP ${res.status}）`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(projectTitle ?? "字幕").replace(/[\\/:*?"<>|]/g, "_")}_字幕.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setMessage({ type: "err", text: e instanceof Error ? e.message : "打包下载失败" });
+    } finally {
+      setBundleBusy(false);
+    }
+  }
+
   /** 选择样式（官方模板或我的模板），重置为该模板的库内配置 */
   function selectStyle(source: "official" | "user", s: StyleMeta) {
     setStyleSource(source);
@@ -463,11 +556,61 @@ export function SubtitleEditor({
             className="block w-full"
             onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           />
-          {/* 字幕叠加预览 */}
-          {activeStyle && activeIdx >= 0 && (
-            <SubtitleOverlay config={activeStyle} segment={segments[activeIdx]} containerH={containerH} />
+          {/* 字幕叠加预览（双语预览模式时显示合成文本） */}
+          {activeStyle && previewSegment && (
+            <SubtitleOverlay config={activeStyle} segment={previewSegment} containerH={containerH} />
           )}
         </div>
+
+        {/* 双语预览切换（存在已完成翻译时显示）：语言 + 原文/译文/双语 */}
+        {translations.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-neutral-500">叠加预览</span>
+            {translations.length > 1 &&
+              translations.map((t) => {
+                const label =
+                  TRANSLATE_LANGUAGES.find((l) => l.code === t.targetLang)?.label ?? t.targetLang;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setPreviewLang(t.targetLang)}
+                    className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                      previewLang === t.targetLang
+                        ? "bg-brand text-white"
+                        : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            {translations.length === 1 && (
+              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500">
+                {TRANSLATE_LANGUAGES.find((l) => l.code === translations[0].targetLang)?.label ??
+                  translations[0].targetLang}
+              </span>
+            )}
+            {(
+              [
+                ["source", "原文"],
+                ["target", "译文"],
+                ["bilingual", "双语"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                onClick={() => setPreviewMode(mode)}
+                className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                  previewMode === mode
+                    ? "bg-brand text-white"
+                    : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 样式切换 + 微调 + 我的模板 */}
         <div className="mt-4 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
@@ -771,6 +914,15 @@ export function SubtitleEditor({
               className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
             >
               文稿MD
+            </button>
+            <button
+              type="button"
+              onClick={() => void downloadBundle()}
+              disabled={bundleBusy}
+              title="打包下载全部字幕产物（原文三格式 + 文稿 + 已完成翻译与双语）"
+              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bundleBusy ? "打包中…" : "打包下载"}
             </button>
             <button
               onClick={handleSave}
