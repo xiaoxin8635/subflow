@@ -1,12 +1,14 @@
 /**
  * @file 媒体处理工具（基于 ffmpeg-static / ffprobe-static 自带二进制）
  * @description 提供：时长探测、音频抽取（16kHz 单声道 mp3，供 ASR）、
- *              封面帧抽取（工作台缩略图）、语音段检测（silencedetect，
- *              供同步 ASR 文本对齐时间戳）、音频切片。
+ *              封面帧抽取（工作台缩略图）、均匀采样抽帧（OCR 硬字幕提取）、
+ *              语音段检测（silencedetect，供同步 ASR 文本对齐时间戳）、音频切片。
  *              所有命令均为 Windows/Linux 兼容的 execFile 调用（不经过 shell，无注入风险）。
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import fs from "node:fs/promises";
+import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 
@@ -69,7 +71,7 @@ export async function extractAudioToMp3(videoPath: string, outMp3: string): Prom
  * 从视频抽取一帧作为封面（工作台缩略图）：640px 宽 JPEG（保持宽高比，高度偶数对齐）
  * @param videoPath 视频路径
  * @param outJpg    输出 JPEG 路径
- * @param atSec     取帧时刻（秒）；建议 min(1, 时长×0.25)——整秒处取帧避开开头黑场，短视频取前 1/4 段
+ * @param atSec     取帧时刻（秒）；封面用 0（视频首帧）
  */
 export async function extractCoverFrame(
   videoPath: string,
@@ -110,6 +112,36 @@ export async function sliceAudio(
     ["-y", "-ss", startSec.toFixed(3), "-i", srcMp3, "-t", durSec.toFixed(3), outPath],
     { maxBuffer: MAX_BUFFER },
   );
+}
+
+/**
+ * 均匀采样抽帧（OCR 硬字幕提取用）：按 fps 抽帧缩放到 640px 宽 JPEG，帧数封顶。
+ * @param videoPath   视频路径
+ * @param outDir      帧图输出目录（需已存在；命名 frame_%04d.jpg，从 1 起）
+ * @param durationSec 视频总时长（秒），用于计算封顶后的采样帧率
+ * @param maxFrames   最大帧数（超过时均匀降采样：fps = maxFrames / duration）
+ * @returns 帧文件名列表（升序，与时间对应：第 i 帧时刻 ≈ i / fps）
+ */
+export async function extractFrames(
+  videoPath: string,
+  outDir: string,
+  durationSec: number,
+  maxFrames: number,
+): Promise<string[]> {
+  // 采样帧率：默认 1fps；超长视频按 maxFrames 封顶均匀降采样（最低 0.1fps 防除零）
+  const fps = durationSec > maxFrames ? Math.max(0.1, maxFrames / durationSec) : 1;
+  await execFileAsync(
+    FFMPEG,
+    [
+      "-y",
+      "-i", videoPath,
+      "-vf", `fps=${fps.toFixed(4)},scale=640:-2`,
+      "-q:v", "5",
+      path.join(outDir, "frame_%04d.jpg"),
+    ],
+    { maxBuffer: MAX_BUFFER },
+  );
+  return (await fs.readdir(outDir)).filter((f) => f.startsWith("frame_") && f.endsWith(".jpg")).sort();
 }
 
 /**

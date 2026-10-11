@@ -1,7 +1,9 @@
 /**
  * @file 项目处理流水线（Redis 队列驱动，Worker 消费）
- * @description 状态机：UPLOADED → TRANSCRIBING（封面抽帧+抽音频+ASR）→ POLISHING（LLM 润色）
+ * @description 状态机：UPLOADED → TRANSCRIBING（封面抽帧 + 按处理模式识别）→ POLISHING（LLM 润色）
  *              → READY / FAILED（原因写入 Project.error）。
+ *              处理模式（Project.processMode）：asr=抽音频+语音转写（默认）；
+ *              ocr=逐帧视觉识别提取画面硬字幕（跳过音频抽取）。
  *              入口 startProcessing 仅负责入队（BullMQ 转写队列）；Redis 不可用时
  *              降级为进程内直跑（job 未入队，无重复风险）。
  *              processProject 只执行不兜错——错误上抛给 Worker 以触发自动重试，
@@ -14,6 +16,7 @@ import fs from "node:fs/promises";
 import { db } from "@/lib/db";
 import { notify } from "@/lib/notify";
 import { extractAudioToMp3, extractCoverFrame, probeDurationSec } from "@/lib/media";
+import { extractSubtitlesFromVideo } from "@/lib/ocr";
 import { coverKeyFor, ensureLocalVideo, publicUrlFor, uploadCover } from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
@@ -58,6 +61,8 @@ export async function markProjectFailed(projectId: string, message: string): Pro
 export async function processProject(projectId: string): Promise<void> {
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project || !project.videoKey) return;
+  // 局部常量捕获非空 videoKey（IIFE 闭包内不保留属性收窄，const 局部变量可以）
+  const videoKey: string = project.videoKey;
 
   // 临时音频文件（流水线结束后清理）
   const tmpAudio = path.join(os.tmpdir(), `subflow-audio-${projectId}.mp3`);
@@ -65,7 +70,7 @@ export async function processProject(projectId: string): Promise<void> {
   try {
     // ① 探测时长并校验上限（oss 模式先拉取到本地缓存）
     await db.project.update({ where: { id: projectId }, data: { status: "TRANSCRIBING" } });
-    const videoPath = await ensureLocalVideo(project.videoKey);
+    const videoPath = await ensureLocalVideo(videoKey);
     const durationSec = await probeDurationSec(videoPath);
     if (durationSec > MAX_VIDEO_DURATION_SEC) {
       throw new Error(`媒体时长 ${Math.round(durationSec / 60)} 分钟，超过上限 ${MAX_VIDEO_DURATION_SEC / 60} 分钟`);
@@ -76,7 +81,7 @@ export async function processProject(projectId: string): Promise<void> {
     if (project.mediaKind !== "audio") {
       try {
         const tmpCover = path.join(os.tmpdir(), `subflow-cover-${projectId}.jpg`);
-        await extractCoverFrame(videoPath, tmpCover, Math.min(1, durationSec * 0.25));
+        await extractCoverFrame(videoPath, tmpCover, 0);
         const coverKey = coverKeyFor(projectId);
         await uploadCover(coverKey, tmpCover);
         await db.project.update({ where: { id: projectId }, data: { coverKey } });
@@ -86,18 +91,23 @@ export async function processProject(projectId: string): Promise<void> {
       }
     }
 
-    // ② 抽取音频（16kHz 单声道 mp3）
-    await extractAudioToMp3(videoPath, tmpAudio);
-
-    // ③ ASR 转写（filetrans provider 需要源文件公网 URL；sync provider 传本地音频即可）
-    const provider = getAsrProvider();
-    const asr = await provider.transcribe({
-      audioPath: tmpAudio,
-      durationSec,
-      language: project.language,
-      publicFileUrl:
-        provider.name === "qwen3-asr-flash-filetrans" ? publicUrlFor(project.videoKey) : undefined,
-    });
+    // ②③ 识别：按处理模式分支（OCR 跳过音频抽取，直接逐帧视觉识别）
+    const asr =
+      project.processMode === "ocr"
+        ? await extractSubtitlesFromVideo(videoPath, durationSec)
+        : await (async () => {
+            // 抽取音频（16kHz 单声道 mp3）
+            await extractAudioToMp3(videoPath, tmpAudio);
+            // ASR 转写（filetrans provider 需要源文件公网 URL；sync provider 传本地音频即可）
+            const provider = getAsrProvider();
+            return provider.transcribe({
+              audioPath: tmpAudio,
+              durationSec,
+              language: project.language,
+              publicFileUrl:
+                provider.name === "qwen3-asr-flash-filetrans" ? publicUrlFor(videoKey) : undefined,
+            });
+          })();
 
     // ④ LLM 润色（失败自动回退原文，不阻断）
     await db.project.update({ where: { id: projectId }, data: { status: "POLISHING" } });

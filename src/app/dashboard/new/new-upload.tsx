@@ -104,6 +104,7 @@ export function NewUploadClient() {
   const [rows, setRows] = useState<FileRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [processMode, setProcessMode] = useState<"asr" | "ocr">("asr");
 
   const hasInvalid = rows.some((r) => r.status === "pending" && !ACCEPT_TYPES[extOf(r.file)]);
   const oversize = (r: FileRow) => r.file.size > MAX_UPLOAD_BYTES;
@@ -246,9 +247,12 @@ export function NewUploadClient() {
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, worker));
 
-    // ④ 全部到齐：通知服务端合并入库
+    // ④ 全部到齐：通知服务端合并入库（音频项目强制 asr，与后端双重校验一致）
+    const isAudio = mime.startsWith("audio/");
     const completeRes = await fetch(`/api/uploads/${run.uploadId}/complete`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ processMode: isAudio ? "asr" : processMode }),
       signal,
     });
     const completeBody = (await completeRes.json().catch(() => ({}))) as {
@@ -330,6 +334,55 @@ export function NewUploadClient() {
         <p className="mt-1 text-sm text-neutral-500">
           支持一次选择多个视频/音频批量上传（mp4 / mov / mkv / webm / mp3 / m4a / wav，单个最大 500MB；分片上传，中断可续传）
         </p>
+
+        {/* 处理模式：语音转写（默认）/ OCR 硬字幕提取（仅视频，音频恒走语音转写） */}
+        <fieldset className="mt-6" disabled={uploading}>
+          <legend className="text-sm font-medium">处理方式</legend>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label
+              className={`cursor-pointer rounded-xl border-2 px-4 py-3 transition-colors ${
+                processMode === "asr"
+                  ? "border-brand bg-brand-soft/40"
+                  : "border-neutral-200 bg-white hover:border-neutral-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="process-mode"
+                value="asr"
+                className="sr-only"
+                checked={processMode === "asr"}
+                onChange={() => setProcessMode("asr")}
+              />
+              <span className="block text-sm font-medium">语音转写</span>
+              <span className="mt-0.5 block text-xs text-neutral-500">
+                识别视频/音频中的人声，逐句生成字幕（默认）
+              </span>
+            </label>
+            <label
+              className={`cursor-pointer rounded-xl border-2 px-4 py-3 transition-colors ${
+                processMode === "ocr"
+                  ? "border-brand bg-brand-soft/40"
+                  : "border-neutral-200 bg-white hover:border-neutral-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="process-mode"
+                value="ocr"
+                className="sr-only"
+                checked={processMode === "ocr"}
+                onChange={() => setProcessMode("ocr")}
+              />
+              <span className="block text-sm font-medium">
+                提取画面字幕<span className="ml-1 rounded bg-neutral-900 px-1 py-0.5 text-[10px] font-medium text-white">OCR</span>
+              </span>
+              <span className="mt-0.5 block text-xs text-neutral-500">
+                视频画面已有字幕时直接提取文字；混选的音频仍按语音转写
+              </span>
+            </label>
+          </div>
+        </fieldset>
 
         {/* 拖放/点击选择区域 */}
         <label

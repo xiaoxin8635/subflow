@@ -48,6 +48,15 @@ export function mediaKindOf(contentType: string): MediaKind | null {
   return null;
 }
 
+/**
+ * 清洗处理模式参数（前后端共用）：白名单外（含缺省/非法值）一律回退 asr。
+ * 音频项目的强制 asr 由各上传入口在判定 mediaKind 后自行处理。
+ * @param value 客户端传入的处理模式（header / JSON 字段）
+ */
+export function normalizeProcessMode(value: unknown): "asr" | "ocr" {
+  return value === "ocr" ? "ocr" : "asr";
+}
+
 /** 大陆手机号格式（前后端共用同一正则，保证校验一致） */
 export const PHONE_RE = /^1[3-9]\d{9}$/;
 

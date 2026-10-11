@@ -74,6 +74,9 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       （桌面侧栏/移动横滑标签栏），项目卡片带封面缩略图（转写时旁路抽帧，失败不阻断）、
       时长角标与字幕条状态徽章；状态筛选（URL 驱动 + 滑动指示条）、
       进行中项目 10 秒自动刷新、内联统计条
+- [x] **P2.10 OCR 硬字幕提取**（`docs/ROADMAP.md` 后置项）：新建项目可选「提取画面字幕」
+      ——qwen3-vl-plus 逐帧识别画面已有字幕（1fps 抽帧 600 帧封顶），相邻帧聚合时间轴，
+      润色/导出/翻译全链路复用；计费与转写同价按视频时长，音频项目强制语音转写
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -300,7 +303,7 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   波形占位图）、右下角时长角标（播放器 UI 惯例）、状态徽章为「字幕条」样式
   （黑底白字小圆角；转写/润色中为 brand 色底 + 呼吸点动画）
 - **封面抽帧链路**：`Project.coverKey`（`covers/{projectId}.jpg` 固定 key，重转写覆盖写）
-  → [src/lib/media.ts](src/lib/media.ts) `extractCoverFrame`（取 25% 处帧避开开头黑场，
+  → [src/lib/media.ts](src/lib/media.ts) `extractCoverFrame`（取视频首帧，
   缩放 640px 宽）→ [src/lib/storage.ts](src/lib/storage.ts) `uploadCover`
   （local 落盘 `uploads/covers/` / oss 上传）→ `GET /api/projects/[id]/cover`
   鉴权输出（local 流式 + 私有缓存头 / oss 302 签名 URL 4h）。
@@ -318,6 +321,33 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   （「X 小时 Y 分钟」）
 - **退出登录**：桌面侧边栏底部整行按钮 + 移动端标签栏末尾紧凑入口
   （[src/components/logout-button.tsx](src/components/logout-button.tsx)）
+- **封面为首帧**：封面帧取视频第 0 帧（用户指定）；seed/重转写固定 key 覆盖写
+
+### OCR 硬字幕提取说明（P2.10）
+
+- **场景**：画面上已烧录字幕的视频（无人声也能提取），扩大可处理视频范围；
+  新建项目页「处理方式」二选一——语音转写（默认）/ 提取画面字幕（OCR，仅视频，
+  混选的音频自动按语音转写）
+- **管线**：`Project.processMode`（asr/ocr，服务端白名单清洗 normalizeProcessMode）
+  → [src/lib/ocr.ts](src/lib/ocr.ts) `extractSubtitlesFromVideo`：均匀采样抽帧
+  （[src/lib/media.ts](src/lib/media.ts) `extractFrames`，1fps，600 帧封顶——超 10 分钟
+  视频均匀降采样）→ **qwen3-vl-plus** 逐帧识别字幕文字（DashScope OpenAI 兼容模式，
+  与 ASR 同一接入；并发 3 `OCR_CONCURRENCY`、单帧重试 2 次指数退避）→ 相邻同文本帧
+  合并为句（时间轴精度 = 采样间隔 1 秒）→ 走既有 LLM 润色与入库链路（OCR 错字更常见，
+  更需要润色）；识别失败与 ASR 同语义走任务失败重试
+- **模型名注意**：旧 `qwen-vl-plus` / `qwen3-vl-flash` 已 404 下线，用 `qwen3-vl-plus`
+  （可用 `OCR_MODEL` 环境变量覆盖）；实测成本约 0.026 元/分钟视频（~285 token/帧）、
+  处理耗时约为视频时长的 60%
+- **入口与 API**：整传 `POST /api/projects` 收 `X-Process-Mode` 头；分片 complete
+  收 body `{ processMode }`；两路均做白名单清洗且**音频项目强制 asr**（前后端双重）；
+  列表/详情接口均返回 `processMode`
+- **全链路复用**：OCR 产出的字幕段结构与转写一致 → 编辑器/样式/导出/翻译/双语/片段
+  全部现成可用；音频项目恒不涉及 OCR
+- **已知边界**：OCR 视频自带原字幕，预览/烧录的新字幕会与原字幕重叠（原字幕无法去除，
+  物理限制）；竖屏花字/滚动字幕不保证识别；全片无字幕时报「OCR 未识别到任何字幕文字」
+  失败（与 ASR 无语音同语义）
+- **E2E**：[scripts/e2e-ocr-test.mjs](scripts/e2e-ocr-test.mjs)（18 断言——含 FFmpeg
+  drawtext 造硬字幕视频，注意 drawtext 必须放在 concat 之后，输入段是局部时间轴）
 
 ### CI 说明（P1.7）
 

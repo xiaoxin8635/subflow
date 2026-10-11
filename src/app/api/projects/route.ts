@@ -14,7 +14,7 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import fs from "node:fs";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { MAX_UPLOAD_BYTES, mediaKindOf } from "@/lib/constants";
+import { MAX_UPLOAD_BYTES, mediaKindOf, normalizeProcessMode } from "@/lib/constants";
 import { ensureUploadDir, generateVideoKey, localVideoPath, isOss } from "@/lib/storage";
 import { startProcessing } from "@/lib/pipeline";
 import { rateLimit } from "@/lib/rate-limit";
@@ -110,6 +110,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   const rawName = decodeURIComponent(request.headers.get("x-file-name") ?? "未命名视频");
   const title = rawName.replace(/[\\/:*?"<>|]/g, "_").slice(0, 100) || "未命名视频";
 
+  // 处理模式（X-Process-Mode 头）：asr 语音转写（默认）/ ocr 硬字幕提取；音频项目强制 asr
+  const processMode = kind === "audio" ? "asr" : normalizeProcessMode(request.headers.get("x-process-mode"));
+
   if (!request.body) {
     return NextResponse.json({ error: "请求体为空" }, { status: 400 });
   }
@@ -120,7 +123,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // 先建项目行（拿到 id），流式写盘；失败则回滚删除
   const project = await db.project.create({
-    data: { userId: user.id, title, mediaKind: kind, videoKey, videoName: rawName, status: "UPLOADED" },
+    data: { userId: user.id, title, mediaKind: kind, processMode, videoKey, videoName: rawName, status: "UPLOADED" },
   });
 
   try {
@@ -179,6 +182,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         title: true,
         status: true,
         mediaKind: true,
+        processMode: true,
         durationSec: true,
         error: true,
         createdAt: true,
@@ -194,6 +198,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       title: p.title,
       status: p.status,
       mediaKind: p.mediaKind,
+      processMode: p.processMode,
       durationSec: p.durationSec,
       error: p.error,
       createdAt: p.createdAt,

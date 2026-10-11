@@ -7,17 +7,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { mediaKindOf } from "@/lib/constants";
+import { mediaKindOf, normalizeProcessMode } from "@/lib/constants";
 import { completeAndMerge, getMeta, isValidUploadId, UploadSessionError } from "@/lib/upload-session";
 import { startProcessing } from "@/lib/pipeline";
 
 /**
  * 完成上传：合并分片并创建项目
- * @param _request 原始请求（无请求体）
+ * @param request 请求（body 可选 JSON { processMode?: "asr" | "ocr" }，缺省 asr）
  * @param params   路由参数（Promise<{ id: string }>）
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -27,6 +27,10 @@ export async function POST(
   if (!isValidUploadId(id)) {
     return NextResponse.json({ error: "上传会话不存在" }, { status: 404 });
   }
+
+  // 处理模式（body 可选字段）：asr 语音转写（默认）/ ocr 硬字幕提取
+  const body = (await request.json().catch(() => null)) as { processMode?: unknown } | null;
+  const requestedMode = normalizeProcessMode(body?.processMode);
 
   try {
     const meta = getMeta(id, user.id);
@@ -42,12 +46,15 @@ export async function POST(
     // 展示字段清洗：与整传 POST /api/projects 保持同一规则
     const title = meta.fileName.replace(/[\\/:*?"<>|]/g, "_").slice(0, 100) || "未命名视频";
 
+    // init 时已过 MIME 白名单，这里按 MIME 定媒体类型（决定导出形态）；音频项目强制 asr
+    const mediaKind = mediaKindOf(meta.contentType) === "audio" ? "audio" : "video";
+
     const project = await db.project.create({
       data: {
         userId: user.id,
         title,
-        // init 时已过 MIME 白名单，这里按 MIME 定媒体类型（决定导出形态）
-        mediaKind: mediaKindOf(meta.contentType) === "audio" ? "audio" : "video",
+        mediaKind,
+        processMode: mediaKind === "audio" ? "asr" : requestedMode,
         videoKey,
         videoName: meta.fileName,
         status: "UPLOADED",

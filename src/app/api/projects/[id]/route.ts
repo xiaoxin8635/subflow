@@ -45,6 +45,7 @@ export async function GET(
       title: project.title,
       status: project.status,
       mediaKind: project.mediaKind,
+      processMode: project.processMode,
       durationSec: project.durationSec,
       error: project.error,
       videoName: project.videoName,
