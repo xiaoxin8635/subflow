@@ -1,6 +1,6 @@
 /**
  * @file 项目处理流水线（Redis 队列驱动，Worker 消费）
- * @description 状态机：UPLOADED → TRANSCRIBING（封面抽帧 + 按处理模式识别）→ POLISHING（LLM 润色）
+ * @description 状态机：UPLOADED → TRANSCRIBING（封面抽帧 + 波形峰值提取 + 按处理模式识别）→ POLISHING（LLM 润色）
  *              → READY / FAILED（原因写入 Project.error）。
  *              处理模式（Project.processMode）：asr=抽音频+语音转写（默认）；
  *              ocr=逐帧视觉识别提取画面硬字幕（跳过音频抽取）。
@@ -15,9 +15,16 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { db } from "@/lib/db";
 import { notify } from "@/lib/notify";
-import { extractAudioToMp3, extractCoverFrame, probeDurationSec } from "@/lib/media";
+import { extractAudioToMp3, extractCoverFrame, extractWaveformPeaks, probeDurationSec } from "@/lib/media";
 import { extractSubtitlesFromVideo } from "@/lib/ocr";
-import { coverKeyFor, ensureLocalVideo, publicUrlFor, uploadCover } from "@/lib/storage";
+import {
+  coverKeyFor,
+  ensureLocalVideo,
+  publicUrlFor,
+  uploadCover,
+  uploadWaveform,
+  waveformKeyFor,
+} from "@/lib/storage";
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
 import { polishSegments } from "@/lib/polish";
@@ -89,6 +96,19 @@ export async function processProject(projectId: string): Promise<void> {
       } catch (e) {
         console.warn(`[pipeline] 项目 ${projectId} 封面抽帧失败（不影响转写）：`, e instanceof Error ? e.message : e);
       }
+    }
+
+    // ①″ 波形峰值（编辑器时间轴渲染）：旁路执行，无音轨（OCR 项目）/提取失败不阻断转写。
+    //     直接对源媒体抽 PCM（-vn 忽略视频轨），视频/音频项目统一处理
+    try {
+      const tmpWaveJson = path.join(os.tmpdir(), `subflow-wave-${projectId}.json`);
+      await extractWaveformPeaks(videoPath, tmpWaveJson);
+      const waveformKey = waveformKeyFor(projectId);
+      await uploadWaveform(waveformKey, tmpWaveJson);
+      await db.project.update({ where: { id: projectId }, data: { waveformKey } });
+      await fs.unlink(tmpWaveJson).catch(() => {});
+    } catch (e) {
+      console.warn(`[pipeline] 项目 ${projectId} 波形提取失败（不影响转写）：`, e instanceof Error ? e.message : e);
     }
 
     // ②③ 识别：按处理模式分支（OCR 跳过音频抽取，直接逐帧视觉识别）

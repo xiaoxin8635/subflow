@@ -8,6 +8,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
@@ -112,6 +113,60 @@ export async function sliceAudio(
     ["-y", "-ss", startSec.toFixed(3), "-i", srcMp3, "-t", durSec.toFixed(3), outPath],
     { maxBuffer: MAX_BUFFER },
   );
+}
+
+/** 波形峰值数据（编辑器 WaveformStrip 渲染消费的 JSON 契约） */
+export interface WaveformData {
+  /** 每秒峰值桶数（前端据此刻时间：index / rate = 秒） */
+  rate: number;
+  /** 峰值数组（16bit 原始振幅 0-32767，前端渲染时自行归一化） */
+  peaks: number[];
+}
+
+/**
+ * 提取音频波形峰值（编辑器时间轴渲染用）：解码为 8kHz 单声道 16bit PCM，
+ * 按桶取绝对值最大值（约 10 桶/秒，总桶数封顶 36000——超长媒体均匀加大桶宽）。
+ * 输出 JSON 体积可控（1 小时 ≈ 250KB），无音轨/损坏文件时 ffmpeg 报错上抛，
+ * 由调用方旁路容错（不阻断转写主流程）。
+ * @param mediaPath 视频或音频文件路径（-vn 自动忽略视频轨）
+ * @param outJson   输出 JSON 路径（{ rate, peaks } 结构）
+ */
+export async function extractWaveformPeaks(
+  mediaPath: string,
+  outJson: string,
+): Promise<void> {
+  const tmpPcm = path.join(
+    os.tmpdir(),
+    `subflow-wave-${Date.now()}-${Math.random().toString(36).slice(2)}.pcm`,
+  );
+  try {
+    // ① 解码为裸 PCM（流式写临时文件，内存不受源时长影响）
+    await execFileAsync(
+      FFMPEG,
+      ["-y", "-i", mediaPath, "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", tmpPcm],
+      { maxBuffer: MAX_BUFFER },
+    );
+    // ② 按桶取峰值：桶宽 ≥800 样本（=10 桶/秒）且总桶数 ≤36000（超长媒体均匀加大桶宽）
+    const pcm = await fs.readFile(tmpPcm);
+    const totalSamples = Math.floor(pcm.length / 2);
+    const MAX_PEAKS = 36000;
+    const samplesPerBucket = Math.max(800, Math.ceil(totalSamples / MAX_PEAKS));
+    const peaks: number[] = [];
+    for (let i = 0; i < totalSamples; i += samplesPerBucket) {
+      const end = Math.min(i + samplesPerBucket, totalSamples);
+      let peak = 0;
+      for (let j = i; j < end; j++) {
+        const v = Math.abs(pcm.readInt16LE(j * 2));
+        if (v > peak) peak = v;
+      }
+      peaks.push(peak);
+    }
+    // ③ 写 JSON（rate 由实际桶宽反推，前端拿它换算时间轴）
+    const data: WaveformData = { rate: 8000 / samplesPerBucket, peaks };
+    await fs.writeFile(outJson, JSON.stringify(data));
+  } finally {
+    await fs.unlink(tmpPcm).catch(() => {});
+  }
 }
 
 /**

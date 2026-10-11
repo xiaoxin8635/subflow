@@ -27,6 +27,7 @@ export interface ProjectDetail {
   mediaKind?: "video" | "audio";
   /** 封面存储 key（转写开始后由 pipeline 旁路生成；音频项目恒为 null） */
   coverKey?: string | null;
+  waveformKey?: string | null;
   durationSec: number | null;
   error: string | null;
   /** UPLOADED（排队中）时的转写队列位置（1 起；null = 队列信息不可用/已在处理） */
@@ -207,6 +208,7 @@ export function ProjectLiveView({
               initialSegments={segments}
               durationSec={project.durationSec ?? 0}
               mediaKind={project.mediaKind ?? "video"}
+              waveformKey={project.waveformKey ?? null}
             />
             {/* 翻译卡：预估字数取当前源字幕总字符数（次要工具，收窄与列表页卡片同级） */}
             <div className="mx-auto max-w-3xl">

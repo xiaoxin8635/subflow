@@ -7,7 +7,7 @@
  *              不感知存储介质。对象 key 语义：
  *                - local 模式源视频 key = {uuid}{ext}（历史数据兼容，无目录前缀）
  *                - oss   模式源视频 key = videos/{uuid}{ext}；成片 key 两种模式一致 = exports/{taskId}.mp4；
- *                  封面帧 key 两种模式一致 = covers/{projectId}.jpg
+ *                  封面帧 key = covers/{projectId}.jpg；波形 JSON key = waveforms/{projectId}.json
  */
 import path from "node:path";
 import fs from "node:fs";
@@ -158,6 +158,41 @@ export async function removeCover(coverKey: string): Promise<void> {
     return;
   }
   await fs.promises.unlink(localPathByKey(coverKey)).catch(() => {});
+}
+
+/**
+ * 生成波形峰值 JSON 存储 key（按项目 ID 固定，重转写覆盖写，语义同封面帧）
+ * @param projectId 项目 ID
+ */
+export function waveformKeyFor(projectId: string): string {
+  return `waveforms/${projectId}.json`;
+}
+
+/**
+ * 上传波形峰值 JSON 到当前驱动（local：uploads/waveforms/ 落盘；oss：上传对象）
+ * @param waveformKey 波形 key（waveformKeyFor 生成）
+ * @param absPath     本地临时 JSON 绝对路径
+ */
+export async function uploadWaveform(waveformKey: string, absPath: string): Promise<void> {
+  if (isOss()) {
+    await ossUploadFile(waveformKey, absPath, "application/json");
+    return;
+  }
+  const dest = localPathByKey(waveformKey);
+  await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+  await fs.promises.copyFile(absPath, dest);
+}
+
+/**
+ * 删除波形 JSON（当前驱动；不存在静默通过）
+ * @param waveformKey 波形 key
+ */
+export async function removeWaveform(waveformKey: string): Promise<void> {
+  if (isOss()) {
+    await ossDelete(waveformKey).catch(() => {});
+    return;
+  }
+  await fs.promises.unlink(localPathByKey(waveformKey)).catch(() => {});
 }
 
 /**

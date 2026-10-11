@@ -4,6 +4,7 @@
  * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换/微调），右侧分段列表。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
  *         删除行、上方插入行、时间轴批量调整（整体偏移/整体伸缩 + 撤销）、
+ *         音频波形时间轴（点击/拖动定位，waveformKey 存在时渲染）、
  *         选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
  *         描边/高亮）、另存为我的模板、删除我的模板、保存（PUT 全量 segments）、
  *         导出成片（ExportCard：携带当前预览样式快照烧录，所见即所得 + 额度扣减 + 下载）。
@@ -16,6 +17,7 @@ import { SubtitleOverlay } from "@/components/subtitle-overlay";
 import { parseStyleConfig } from "@/lib/style-config";
 import type { StyleConfig } from "@/lib/style-config";
 import { ExportCard } from "./export-card";
+import { WaveformStrip } from "./waveform-strip";
 
 /** 编辑器使用的分段结构（keywords 由后端保证存在） */
 export interface EditorSegment {
@@ -57,6 +59,7 @@ function fmt(t: number): string {
  * @param initialSegments 服务端首屏字幕分段
  * @param durationSec     媒体时长（秒），用于导出扣费展示
  * @param mediaKind       媒体类型（audio 时导出卡隐藏成片烧录入口）
+ * @param waveformKey     波形 JSON 存储 key（转写时旁路生成；为空不渲染波形时间轴）
  */
 export function SubtitleEditor({
   projectId,
@@ -64,12 +67,14 @@ export function SubtitleEditor({
   initialSegments,
   durationSec,
   mediaKind = "video",
+  waveformKey = null,
 }: {
   projectId: string;
   projectTitle?: string;
   initialSegments: EditorSegment[];
   durationSec: number;
   mediaKind?: "video" | "audio";
+  waveformKey?: string | null;
 }) {
   const [segments, setSegments] = useState<EditorSegment[]>(initialSegments);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -194,6 +199,11 @@ export function SubtitleEditor({
       videoRef.current.currentTime = t;
       void videoRef.current.play().catch(() => {});
     }
+  }
+
+  /** 波形时间轴定位：只 seek 不播放（与行点击「跳转并播放」语义区分） */
+  function seekOnly(t: number) {
+    if (videoRef.current) videoRef.current.currentTime = t;
   }
 
   /** 更新某行字段 */
@@ -678,6 +688,18 @@ export function SubtitleEditor({
         <p className="mt-1 text-xs text-neutral-400">
           快捷键：空格 播放/暂停 · ← → 快退/快进 2 秒 · Ctrl+S 保存
         </p>
+
+        {/* 音频波形时间轴（转写时旁路生成；旧项目/提取失败时不渲染，退化为行内轨道条） */}
+        {waveformKey && durationSec > 0 && (
+          <div className="mt-3">
+            <WaveformStrip
+              projectId={projectId}
+              durationSec={durationSec}
+              currentTime={currentTime}
+              onSeek={seekOnly}
+            />
+          </div>
+        )}
 
         {/* 时间轴批量调整（整体与语音不同步时使用；纯前端计算，保存走统一 PUT） */}
         <div className="mt-2">
