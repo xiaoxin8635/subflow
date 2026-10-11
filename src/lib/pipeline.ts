@@ -28,8 +28,8 @@ import {
 import { getAsrProvider } from "@/lib/asr";
 import type { StoredSegment } from "@/lib/asr/types";
 import { polishSegments } from "@/lib/polish";
+import { asrSceneOf, buildAsrContext, MAX_VIDEO_DURATION_SEC, parseHotwords } from "@/lib/constants";
 import { enqueueTranscribe } from "@/lib/queue/queues";
-import { MAX_VIDEO_DURATION_SEC } from "@/lib/constants";
 
 /**
  * 启动转写任务：优先入队（Worker 消费），Redis 不可用时降级进程内直跑
@@ -111,7 +111,11 @@ export async function processProject(projectId: string): Promise<void> {
       console.warn(`[pipeline] 项目 ${projectId} 波形提取失败（不影响转写）：`, e instanceof Error ? e.message : e);
     }
 
-    // ②③ 识别：按处理模式分支（OCR 跳过音频抽取，直接逐帧视觉识别）
+    // ②③ 识别：按处理模式分支（OCR 跳过音频抽取，直接逐帧视觉识别）。
+    //     识别设置（P2.11）：场景+热词组装为语境增强文本（asr/ocr 共用润色，
+    //     但 ASR Context 仅语音转写需要；OCR 的场景/语言设置不参与识别）
+    const hotwords = parseHotwords(project.hotwords);
+    const polishSceneHint = asrSceneOf(project.scene).context || undefined;
     const asr =
       project.processMode === "ocr"
         ? await extractSubtitlesFromVideo(videoPath, durationSec)
@@ -124,14 +128,19 @@ export async function processProject(projectId: string): Promise<void> {
               audioPath: tmpAudio,
               durationSec,
               language: project.language,
+              asrContext: buildAsrContext(project.scene, hotwords),
+              enableItn: true,
               publicFileUrl:
                 provider.name === "qwen3-asr-flash-filetrans" ? publicUrlFor(videoKey) : undefined,
             });
           })();
 
-    // ④ LLM 润色（失败自动回退原文，不阻断）
+    // ④ LLM 润色（失败自动回退原文，不阻断）：热词纠错与场景语境对 asr/ocr 均生效
     await db.project.update({ where: { id: projectId }, data: { status: "POLISHING" } });
-    const { texts, polished } = await polishSegments(asr.segments.map((s) => s.text));
+    const { texts, polished } = await polishSegments(
+      asr.segments.map((s) => s.text),
+      { sceneHint: polishSceneHint, hotwords },
+    );
     const segments: StoredSegment[] = asr.segments.map((s, i) => ({
       start: Math.round(s.start * 1000) / 1000,
       end: Math.round(s.end * 1000) / 1000,

@@ -57,6 +57,116 @@ export function normalizeProcessMode(value: unknown): "asr" | "ocr" {
   return value === "ocr" ? "ocr" : "asr";
 }
 
+// ---------------------------------------------------------------------
+// 语音识别设置（P2.11 场景自适应识别）：场景预设 / 主语言 / 自定义热词。
+// 场景与热词在两处生效——ASR 语境增强（filetrans 走 parameters.corpus，
+// 同步模式不支持语境输入）与 AI 润色纠错 prompt；语言透传 DashScope
+// asr_options.language。
+// ---------------------------------------------------------------------
+
+/** 识别场景预设：context 为注入 ASR/润色的场景描述文本（空串 = 无附加描述） */
+export const ASR_SCENES = [
+  {
+    code: "general",
+    label: "通用",
+    hint: "日常口播 / vlog / 访谈",
+    context: "",
+  },
+  {
+    code: "tech",
+    label: "技术讲解",
+    hint: "编程 / 软件教程，专有名词多",
+    context:
+      "这是一段编程与技术讲解视频，内容涉及软件开发、API、框架、模型等专业术语，英文术语请按原貌识别。",
+  },
+  {
+    code: "live",
+    label: "直播带货",
+    hint: "商品讲解 / 价格口播",
+    context:
+      "这是一段电商直播带货录音，内容涉及商品名称、品牌与促销话术，数字与商品名请准确识别。",
+  },
+  {
+    code: "course",
+    label: "课堂讲课",
+    hint: "知识讲授 / 课程录屏",
+    context: "这是一段课堂教学录音，内容为系统性的知识讲授，术语密度较高。",
+  },
+] as const;
+
+/** 场景代码类型 */
+export type AsrSceneCode = (typeof ASR_SCENES)[number]["code"];
+
+/**
+ * 清洗场景参数：白名单外（含缺省/非法值）回退 general
+ * @param value 客户端传入的场景代码
+ */
+export function normalizeScene(value: unknown): AsrSceneCode {
+  return ASR_SCENES.some((s) => s.code === value) ? (value as AsrSceneCode) : "general";
+}
+
+/**
+ * 按代码查询场景预设定义
+ * @param code 场景代码
+ * @returns 场景定义（未命中返回通用）
+ */
+export function asrSceneOf(code: string): (typeof ASR_SCENES)[number] {
+  return ASR_SCENES.find((s) => s.code === code) ?? ASR_SCENES[0];
+}
+
+/** 识别主语言（code 透传 DashScope；auto = 自动检测，不传语言参数） */
+export const ASR_LANGUAGES = [
+  { code: "zh", label: "中文（普通话）" },
+  { code: "yue", label: "粤语" },
+  { code: "en", label: "英语" },
+  { code: "ja", label: "日语" },
+  { code: "ko", label: "韩语" },
+  { code: "auto", label: "自动检测" },
+] as const;
+
+/**
+ * 清洗识别主语言参数：白名单外回退 zh
+ * @param value 客户端传入的语言代码
+ */
+export function normalizeAsrLanguage(value: unknown): string {
+  return ASR_LANGUAGES.some((l) => l.code === value) ? (value as string) : "zh";
+}
+
+/** 热词数量上限（DashScope context 长度有限，防超长输入） */
+export const HOTWORDS_MAX_COUNT = 50;
+
+/** 单个热词字符上限 */
+export const HOTWORD_MAX_LEN = 30;
+
+/**
+ * 清洗热词输入：按逗号/顿号/分号/换行拆分，去空去重、限长限量
+ * @param value 客户端传入的热词原始串
+ * @returns 干净的热词数组（保持输入顺序）
+ */
+export function parseHotwords(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  const words = value
+    .split(/[,，、;；\n]/)
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0 && w.length <= HOTWORD_MAX_LEN);
+  return Array.from(new Set(words)).slice(0, HOTWORDS_MAX_COUNT);
+}
+
+/**
+ * 组装 ASR 语境增强文本（场景描述 + 热词表），注入 qwen-filetrans 的
+ * parameters.corpus（同步模式 qwen-sync 实测拒绝语境输入，其场景/热词
+ * 由润色纠错 prompt 承担）；两者皆空时返回 undefined（不注入）
+ * @param scene    场景代码（normalize 后）
+ * @param hotwords 清洗后的热词数组
+ */
+export function buildAsrContext(scene: string, hotwords: string[]): string | undefined {
+  const parts: string[] = [];
+  const sceneContext = asrSceneOf(scene).context;
+  if (sceneContext) parts.push(sceneContext);
+  if (hotwords.length > 0) parts.push(`音视频中可能出现以下专有名词，请准确识别：${hotwords.join("、")}`);
+  return parts.length > 0 ? parts.join("。") : undefined;
+}
+
 /** 大陆手机号格式（前后端共用同一正则，保证校验一致） */
 export const PHONE_RE = /^1[3-9]\d{9}$/;
 
@@ -109,6 +219,51 @@ export function translateCostSeconds(charCount: number): number {
 
 /** 翻译任务限流：每用户每小时最多发起次数（防 LLM 成本被刷） */
 export const TRANSLATE_RATE_LIMIT_PER_HOUR = 10;
+
+// ---------------------------------------------------------------------
+// 翻译风格（P2.11 翻译风格控制）：instruction 注入翻译 system prompt；
+// 项目热词自动作为术语表注入（品牌名/产品名全片译法统一）
+// ---------------------------------------------------------------------
+
+/** 翻译风格预设 */
+export const TRANSLATE_STYLES = [
+  {
+    code: "general",
+    label: "通用",
+    instruction: "译文自然流畅，符合目标语言的表达习惯。",
+  },
+  {
+    code: "colloquial",
+    label: "口语化",
+    instruction: "译文口语化、有网感，像视频博主的说话方式，可适度使用目标语言的流行表达。",
+  },
+  {
+    code: "concise",
+    label: "短视频精简",
+    instruction:
+      "译文尽量简短精炼，适合短视频字幕快速阅读：优先短句，省略不影响语义的虚词与客套表达。",
+  },
+] as const;
+
+/** 翻译风格代码类型 */
+export type TranslateStyleCode = (typeof TRANSLATE_STYLES)[number]["code"];
+
+/**
+ * 清洗翻译风格参数：白名单外（含缺省/非法值）回退 general
+ * @param value 客户端传入的风格代码
+ */
+export function normalizeTranslateStyle(value: unknown): TranslateStyleCode {
+  return TRANSLATE_STYLES.some((s) => s.code === value) ? (value as TranslateStyleCode) : "general";
+}
+
+/**
+ * 按代码查询翻译风格定义
+ * @param code 风格代码
+ * @returns 风格定义（未命中返回通用）
+ */
+export function translateStyleOf(code: string): (typeof TRANSLATE_STYLES)[number] {
+  return TRANSLATE_STYLES.find((s) => s.code === code) ?? TRANSLATE_STYLES[0];
+}
 
 /**
  * 片段导出计费（P2.6 付费点）：按片段时长 1:1 计费（向上取整，最低 1 秒）

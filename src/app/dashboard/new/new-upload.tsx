@@ -14,7 +14,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MAX_UPLOAD_BYTES } from "@/lib/constants";
+import { ASR_LANGUAGES, ASR_SCENES, MAX_UPLOAD_BYTES } from "@/lib/constants";
 
 /** 允许的媒体扩展名与 MIME（视频 + 纯音频，与后端 EXT_BY_TYPE 保持一致） */
 const ACCEPT_TYPES: Record<string, string> = {
@@ -105,18 +105,25 @@ export function NewUploadClient() {
   const [uploading, setUploading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [processMode, setProcessMode] = useState<"asr" | "ocr">("asr");
+  // 识别设置（P2.11 场景自适应）：场景预设 / 识别主语言 / 自定义热词
+  const [scene, setScene] = useState<string>("general");
+  const [language, setLanguage] = useState<string>("zh");
+  const [hotwords, setHotwords] = useState("");
 
   const hasInvalid = rows.some((r) => r.status === "pending" && !ACCEPT_TYPES[extOf(r.file)]);
   const oversize = (r: FileRow) => r.file.size > MAX_UPLOAD_BYTES;
   const doneCount = rows.filter((r) => r.status === "done").length;
   const pendingRows = () => rows.filter((r) => r.status === "pending" || r.status === "canceled" || r.status === "failed");
 
-  /** 追加文件（点击选择/拖拽共用）：去重、限流到 MAX_BATCH_FILES */
-  function addFiles(list: FileList | File[]) {
+  /** 追加文件（点击选择/拖拽共用）：去重、限流到 MAX_BATCH_FILES。
+   *  必须传已快照的 File 数组——React 的 setState updater 延迟到渲染期才执行，
+   *  若直接传 input 的 FileList，随后 onChange 里的 value 重置会把 files 清空，
+   *  updater 迭代到空列表导致「选了文件但列表没反应」 */
+  function addFiles(list: File[]) {
     setSummary(null);
     setRows((prev) => {
       const existing = new Set(prev.map((r) => `${r.file.name}:${r.file.size}`));
-      const incoming = Array.from(list)
+      const incoming = list
         .filter((f) => !existing.has(`${f.name}:${f.size}`))
         .slice(0, MAX_BATCH_FILES - prev.length);
       return [
@@ -252,7 +259,12 @@ export function NewUploadClient() {
     const completeRes = await fetch(`/api/uploads/${run.uploadId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ processMode: isAudio ? "asr" : processMode }),
+      body: JSON.stringify({
+        processMode: isAudio ? "asr" : processMode,
+        scene,
+        language,
+        hotwords,
+      }),
       signal,
     });
     const completeBody = (await completeRes.json().catch(() => ({}))) as {
@@ -384,13 +396,81 @@ export function NewUploadClient() {
           </div>
         </fieldset>
 
+        {/* 识别设置（P2.11 场景自适应）：语音转写显示全部；OCR 模式仅热词（用于 AI 润色纠错） */}
+        <fieldset className="mt-6" disabled={uploading}>
+          <legend className="text-sm font-medium">识别设置（可选）</legend>
+
+          {processMode === "asr" && (
+            <>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {ASR_SCENES.map((s) => (
+                  <label
+                    key={s.code}
+                    className={`cursor-pointer rounded-xl border-2 px-3 py-2.5 transition-colors ${
+                      scene === s.code
+                        ? "border-brand bg-brand-soft/40"
+                        : "border-neutral-200 bg-white hover:border-neutral-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="asr-scene"
+                      value={s.code}
+                      className="sr-only"
+                      checked={scene === s.code}
+                      onChange={() => setScene(s.code)}
+                    />
+                    <span className="block text-sm font-medium">{s.label}</span>
+                    <span className="mt-0.5 block text-xs text-neutral-500">{s.hint}</span>
+                  </label>
+                ))}
+              </div>
+
+              <label className="mt-4 block">
+                <span className="text-sm font-medium">视频主要语言</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:w-64"
+                >
+                  {ASR_LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-neutral-400">
+                  指定语言可提高识别准确率；数字将自动转阿拉伯数字（如「一百二十三」→「123」）
+                </span>
+              </label>
+            </>
+          )}
+
+          <label className="mt-4 block">
+            <span className="text-sm font-medium">专有名词热词</span>
+            <input
+              type="text"
+              value={hotwords}
+              onChange={(e) => setHotwords(e.target.value)}
+              maxLength={600}
+              placeholder={processMode === "asr" ? "如：API, agent, RPA, token, 昆明, 螺蛳粉" : "如：API, agent, RPA, token"}
+              className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm transition-colors placeholder:text-neutral-300 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+            <span className="mt-1 block text-xs text-neutral-400">
+              {processMode === "asr"
+                ? "多个词用逗号分隔（最多 50 个）。视频里的品牌名、人名、专业术语识别不准时填这里，识别和 AI 润色都会纠正"
+                : "多个词用逗号分隔（最多 50 个）。画面字幕里的专有名词写错时，AI 润色会按这里的写法纠正"}
+            </span>
+          </label>
+        </fieldset>
+
         {/* 拖放/点击选择区域 */}
         <label
           className="mt-8 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-white px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-brand-soft/40"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+            if (e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
           }}
         >
           <input
@@ -400,7 +480,7 @@ export function NewUploadClient() {
             accept="video/mp4,video/quicktime,video/x-matroska,video/webm,audio/mpeg,audio/mp4,audio/wav"
             className="hidden"
             onChange={(e) => {
-              if (e.target.files?.length) addFiles(e.target.files);
+              if (e.target.files?.length) addFiles(Array.from(e.target.files));
               e.target.value = ""; // 允许重复选择同一文件
             }}
             disabled={uploading}

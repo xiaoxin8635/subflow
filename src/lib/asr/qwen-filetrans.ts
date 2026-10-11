@@ -74,18 +74,28 @@ async function dashscopeFetch(pathWithQuery: string, init?: RequestInit): Promis
 export const qwenFiletransProvider: AsrProvider = {
   name: "qwen3-asr-flash-filetrans",
 
-  async transcribe({ durationSec, language = "zh", publicFileUrl }: TranscribeOptions): Promise<AsrResult> {
+  async transcribe({
+    language = "zh",
+    asrContext,
+    publicFileUrl,
+  }: TranscribeOptions): Promise<AsrResult> {
     if (!publicFileUrl) {
       throw new Error("qwen-filetrans 需要调用方传入 publicFileUrl（公网可访问的源文件地址）");
     }
 
-    // 1. 提交任务
+    // 1. 提交任务（language=auto 时不传语言参数交给服务端检测；
+    //    语境增强（场景/热词）走 parameters.corpus——官方文档热词语料通道）
     const submitRes = await dashscopeFetch("", {
       method: "POST",
       body: JSON.stringify({
         model: "qwen3-asr-flash-filetrans",
         input: { file_urls: [publicFileUrl] },
-        parameters: { language_hints: [language] },
+        parameters: {
+          // qwen3-asr-flash-filetrans 的语言参数是顶层 language（string），
+          // 不是 paraformer 时代的 language_hints 数组（官方 API 文档）
+          ...(language !== "auto" ? { language } : {}),
+          ...(asrContext ? { corpus: { text: asrContext } } : {}),
+        },
       }),
     });
     const taskId = submitRes.output?.task_id;

@@ -33,34 +33,68 @@ function newClient(): OpenAI {
 /** 休眠工具 */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** DashScope qwen3-asr 扩展参数（OpenAI SDK 类型不含，运行时随请求体原样透传） */
+interface DashScopeAsrExtension {
+  asr_options?: {
+    /** 指定识别主语言（26 种，如 zh/yue/en/ja/ko）；不传则自动检测 */
+    language?: string;
+    /** 数字规范化 ITN：文本中的数字转阿拉伯数字（字幕惯例） */
+    enable_itn?: boolean;
+  };
+}
+
+/** qwen3-asr 请求体类型（OpenAI 兼容参数 + DashScope 扩展） */
+type QwenAsrRequestBody = OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & DashScopeAsrExtension;
+
 /**
  * 转写单个音频块（Base64 input_audio），带指数退避重试。
- * 实测要点（DashScope qwen3-asr-flash 兼容模式）：
+ * 实测要点（DashScope qwen3-asr-flash 兼容模式，2026-10 实测）：
  *   - input_audio.data 必须是 data URI（"data:audio/mp3;base64,..."），
  *     裸 base64 会被服务端误判为音频 URL 报 InvalidParameter；
- *   - content 中不能携带 text part，否则报 "dedicated task asr does not support this input"。
- * @param audioPath 音频文件路径（读取后转 Base64）
+ *   - user message 的 content 中不能携带 text part，否则报
+ *     "dedicated task asr does not support this input"；
+ *   - system message 同样被拒绝（同款报错）——官方文档声称兼容模式支持
+ *     System Message 作 Context，但 dashscope.aliyuncs.com 旧域名实测不支持。
+ *     因此场景/热词的语境增强不在 ASR 层注入，由 AI 润色纠错 prompt 承担
+ *     （qwen-flash 是常规 chat 模型无此限制）；filetrans 走 parameters.corpus。
+ *   - asr_options.language / enable_itn 正常生效（实测通过）。
+ * @param base64 音频块 Base64（data URI 由本函数拼接）
+ * @param opts   语言 + ITN 开关
  * @returns 该块的纯文本转写结果
  */
-async function transcribeChunkBase64(base64: string): Promise<string> {
+async function transcribeChunkBase64(
+  base64: string,
+  opts: { language: string; enableItn: boolean },
+): Promise<string> {
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_audio",
+          input_audio: { data: `data:audio/mp3;base64,${base64}`, format: "mp3" },
+        },
+      ],
+    },
+  ];
+
+  const body: QwenAsrRequestBody = {
+    model: "qwen3-asr-flash",
+    messages,
+    temperature: 0,
+  };
+  // asr_options 仅在有实际内容时携带（auto = 不指定语言，交给服务端自动检测）
+  if (opts.language !== "auto" || opts.enableItn) {
+    body.asr_options = {
+      ...(opts.language !== "auto" ? { language: opts.language } : {}),
+      enable_itn: opts.enableItn,
+    };
+  }
+
   let lastErr: unknown = new Error("未知错误");
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await newClient().chat.completions.create({
-        model: "qwen3-asr-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_audio",
-                input_audio: { data: `data:audio/mp3;base64,${base64}`, format: "mp3" },
-              },
-            ],
-          },
-        ],
-        temperature: 0,
-      });
+      const res = await newClient().chat.completions.create(body);
       const text = res.choices[0]?.message?.content?.trim() ?? "";
       if (!text) throw new Error("ASR 返回空文本");
       return text;
@@ -77,7 +111,12 @@ async function transcribeChunkBase64(base64: string): Promise<string> {
 export const qwenSyncProvider: AsrProvider = {
   name: "qwen3-asr-flash-sync",
 
-  async transcribe({ audioPath, durationSec, language = "zh" }: TranscribeOptions): Promise<AsrResult> {
+  async transcribe({
+    audioPath,
+    durationSec,
+    language = "zh",
+    enableItn = true,
+  }: TranscribeOptions): Promise<AsrResult> {
     const chunkCount = Math.max(1, Math.ceil(durationSec / CHUNK_SEC));
 
     // 1. 整段语音段检测一次（块对齐时按块窗口截取），避免重复跑 silencedetect
@@ -112,7 +151,7 @@ export const qwenSyncProvider: AsrProvider = {
       }
 
       try {
-        const chunkText = await transcribeChunkBase64(base64);
+        const chunkText = await transcribeChunkBase64(base64, { language, enableItn });
         if (!chunkText) continue;
         rawParts.push(chunkText);
         segments.push(

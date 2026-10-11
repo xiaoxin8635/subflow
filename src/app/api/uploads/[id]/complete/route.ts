@@ -7,13 +7,19 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { mediaKindOf, normalizeProcessMode } from "@/lib/constants";
+import {
+  mediaKindOf,
+  normalizeAsrLanguage,
+  normalizeProcessMode,
+  normalizeScene,
+  parseHotwords,
+} from "@/lib/constants";
 import { completeAndMerge, getMeta, isValidUploadId, UploadSessionError } from "@/lib/upload-session";
 import { startProcessing } from "@/lib/pipeline";
 
 /**
  * 完成上传：合并分片并创建项目
- * @param request 请求（body 可选 JSON { processMode?: "asr" | "ocr" }，缺省 asr）
+ * @param request 请求（body 可选 JSON { processMode?, scene?, language?, hotwords? }，缺省 asr/general/zh）
  * @param params   路由参数（Promise<{ id: string }>）
  */
 export async function POST(
@@ -28,9 +34,17 @@ export async function POST(
     return NextResponse.json({ error: "上传会话不存在" }, { status: 404 });
   }
 
-  // 处理模式（body 可选字段）：asr 语音转写（默认）/ ocr 硬字幕提取
-  const body = (await request.json().catch(() => null)) as { processMode?: unknown } | null;
+  // 处理模式与识别设置（body 可选字段）：白名单外一律回退默认值
+  const body = (await request.json().catch(() => null)) as {
+    processMode?: unknown;
+    scene?: unknown;
+    language?: unknown;
+    hotwords?: unknown;
+  } | null;
   const requestedMode = normalizeProcessMode(body?.processMode);
+  const scene = normalizeScene(body?.scene);
+  const language = normalizeAsrLanguage(body?.language);
+  const hotwords = parseHotwords(body?.hotwords);
 
   try {
     const meta = getMeta(id, user.id);
@@ -58,6 +72,9 @@ export async function POST(
         videoKey,
         videoName: meta.fileName,
         status: "UPLOADED",
+        scene,
+        language,
+        hotwords: hotwords.length > 0 ? hotwords.join(",") : null,
       },
     });
 

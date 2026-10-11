@@ -143,7 +143,9 @@ model Project {
   videoName   String? // 原始文件名
   durationSec Float? // 媒体时长（秒），由 FFmpeg 探测
   error       String? // 流水线失败原因（status=FAILED 时展示给用户）
-  language    String        @default("zh")
+  language    String        @default("zh") // 识别主语言（P2.11 场景自适应）：zh/yue/en/ja/ko，auto=自动检测（不传 API 语言参数）
+  scene       String        @default("general") // 识别场景预设（P2.11）：general/tech/live/course，注入 ASR Context 与润色 prompt
+  hotwords    String? // 自定义热词（P2.11）：逗号分隔存储，注入 ASR Context、润色纠错与翻译术语
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -236,6 +238,7 @@ model Translation {
   id          String     @id @default(cuid())
   projectId   String
   targetLang  String // 目标语言代码（见 constants.ts TRANSLATE_LANGUAGES）
+  style       String     @default("general") // 翻译风格（P2.11）：general/colloquial/concise，注入翻译 prompt
   status      TaskStatus @default(PENDING)
   segments    Json? // 翻译后分段 [{ start, end, text }]（完成时写入）
   charCount   Int? // 源字幕总字符数（计费依据快照）
