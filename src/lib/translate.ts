@@ -11,6 +11,14 @@ import OpenAI from "openai";
 /** 单次 LLM 调用翻译的句子数上限（控制输出长度，防止截断） */
 const TRANSLATE_BATCH_SIZE = 40;
 
+/** 翻译可选参数（P2.11 风格控制 + 术语统一） */
+export interface TranslateOptions {
+  /** 风格指令文本（来自 TRANSLATE_STYLES[].instruction，注入 system prompt） */
+  styleInstruction?: string;
+  /** 术语表（项目热词，要求全片译法统一、品牌/产品名保留原文） */
+  glossary?: string[];
+}
+
 /** 创建 DashScope 兼容模式客户端（与 polish.ts 同一接入方式） */
 function newClient(): OpenAI {
   const apiKey = process.env.DASHSCOPE_API_KEY;
@@ -26,6 +34,7 @@ function newClient(): OpenAI {
  * @param texts 批内源句数组
  * @param targetLang 目标语言代码（提示词用）
  * @param langLabel 目标语言展示名（提示词用，比代码更利于模型理解）
+ * @param opts 风格指令与术语表（可空）
  * @returns 与输入等长的译文数组（已逐句校验非空字符串）
  * @throws API 调用失败 / 返回不含 JSON / 句数不符 / 存在空译文时抛 Error
  */
@@ -33,19 +42,28 @@ async function translateBatchOnce(
   texts: string[],
   targetLang: string,
   langLabel: string,
+  opts: TranslateOptions = {},
 ): Promise<string[]> {
+  // system：基础职责 + 可选风格指令 + 可选术语表（全片译法一致是术语表的核心价值）
+  const systemParts = [
+    `你是专业短视频字幕翻译。把给定的每句简体中文文本翻译成${langLabel}。`,
+    "严格要求：逐句翻译，不合并或拆分句子，句数与输入完全一致；" +
+      "译文保持字幕长度（简洁口语化，不逐字硬译）；不添加任何解释、序号或前后缀；" +
+      "专有名词/品牌名保留原文。",
+  ];
+  if (opts.styleInstruction) systemParts.push(`翻译风格：${opts.styleInstruction}`);
+  if (opts.glossary && opts.glossary.length > 0) {
+    systemParts.push(
+      `术语表（以下词条全片译法必须统一；品牌名/产品名/人名保留原文，` +
+        `其余按行业通用译法）：${opts.glossary.join("、")}。`,
+    );
+  }
+
   const res = await newClient().chat.completions.create({
     model: "qwen-flash",
     temperature: 0.1,
     messages: [
-      {
-        role: "system",
-        content:
-          `你是专业短视频字幕翻译。把给定的每句简体中文文本翻译成${langLabel}。` +
-          "严格要求：逐句翻译，不合并或拆分句子，句数与输入完全一致；" +
-          "译文保持字幕长度（简洁口语化，不逐字硬译）；不添加任何解释、序号或前后缀；" +
-          "专有名词/品牌名保留原文。",
-      },
+      { role: "system", content: systemParts.join("") },
       {
         role: "user",
         content:
@@ -81,6 +99,7 @@ async function translateBatchOnce(
  * @param texts 源句数组（与转写分段一一对应）
  * @param targetLang 目标语言代码（TRANSLATE_LANGUAGES 白名单内的 code）
  * @param langLabel 目标语言展示名
+ * @param opts 风格指令与术语表（P2.11，可空；注入每一批的 system prompt）
  * @returns 与输入索引对齐的译文数组
  * @throws 任一批次失败即抛错（带批次序号上下文，便于排查）
  */
@@ -88,6 +107,7 @@ export async function translateSegments(
   texts: string[],
   targetLang: string,
   langLabel: string,
+  opts: TranslateOptions = {},
 ): Promise<string[]> {
   if (texts.length === 0) return [];
 
@@ -95,7 +115,7 @@ export async function translateSegments(
   for (let i = 0; i < texts.length; i += TRANSLATE_BATCH_SIZE) {
     const batch = texts.slice(i, i + TRANSLATE_BATCH_SIZE);
     try {
-      const translated = await translateBatchOnce(batch, targetLang, langLabel);
+      const translated = await translateBatchOnce(batch, targetLang, langLabel, opts);
       out.push(...translated);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -4,6 +4,8 @@
  * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换/微调），右侧分段列表。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
  *         删除行、上方插入行、时间轴批量调整（整体偏移/整体伸缩 + 撤销）、
+ *         查找替换（批量修正错别字/统一术语，与时间轴共用撤销快照）、
+ *         文稿导出（纯文本 TXT 逐句一行 / 带时间戳 Markdown）、
  *         音频波形时间轴（点击/拖动定位；波形上叠加字幕段落块，拖边缘调起止/拖整体平移，
  *         waveformKey 存在时渲染）、
  *         选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
@@ -94,6 +96,10 @@ export function SubtitleEditor({
   const [offsetSec, setOffsetSec] = useState("0");
   const [scaleRatio, setScaleRatio] = useState("1.00");
   const [tlUndo, setTlUndo] = useState<EditorSegment[] | null>(null);
+  // 查找替换（P2.11）：批量修正错别字 / 统一术语写法
+  const [findOpen, setFindOpen] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
   const [message, setMessage] = useState<{ type: "ok" | "err" | "warn"; text: string } | null>(null);
   const [containerH, setContainerH] = useState(0);
 
@@ -150,6 +156,12 @@ export function SubtitleEditor({
   const activeIdx = useMemo(
     () => segments.findIndex((s) => currentTime >= s.start && currentTime < s.end),
     [segments, currentTime],
+  );
+
+  /** 查找词命中的分段数（查找词为空时为 0，替换按钮禁用） */
+  const findMatchCount = useMemo(
+    () => (findText ? segments.filter((s) => s.text.includes(findText)).length : 0),
+    [findText, segments],
   );
 
   // 播放中自动滚动到当前行
@@ -296,12 +308,55 @@ export function SubtitleEditor({
     });
   }
 
-  /** 撤销最近一次时间轴批量调整（恢复应用前快照，仅保留一步） */
+  /** 撤销最近一次批量调整（时间轴/查找替换共用快照，仅保留一步） */
   function undoTimeline() {
     if (!tlUndo) return;
     setSegments(tlUndo);
     setTlUndo(null);
-    setMessage({ type: "ok", text: "已撤销最近一次时间轴调整" });
+    setMessage({ type: "ok", text: "已撤销最近一次批量调整" });
+  }
+
+  /**
+   * 查找替换全部命中（P2.11）：替换前快照进 tlUndo（与时间轴批量调整共用撤销），
+   * 替换只改本地预览，需「保存修改」后服务端与导出才生效
+   */
+  function replaceAllMatches() {
+    if (!findText) return;
+    setTlUndo(segments);
+    let hitCount = 0;
+    setSegments(
+      segments.map((s) => {
+        if (!s.text.includes(findText)) return s;
+        hitCount += s.text.split(findText).length - 1;
+        return { ...s, text: s.text.split(findText).join(replaceText) };
+      }),
+    );
+    setMessage({
+      type: "ok",
+      text: `已替换 ${hitCount} 处（「${findText}」→「${replaceText || "（删除）"}」），核对后请保存`,
+    });
+  }
+
+  /**
+   * 下载纯文稿（P2.11）：纯文本逐句一行（.txt）或带时间戳 Markdown（.md，
+   * 「**mm:ss.d** 句文本」）。加 UTF-8 BOM 保证 Windows 记事本/Excel 不乱码；
+   * 文件名清洗 Windows 非法字符
+   * @param withTimestamp true = 带时间戳 .md；false = 纯文稿 .txt
+   */
+  function downloadScript(withTimestamp: boolean) {
+    const safeName = (projectTitle ?? "字幕文稿").replace(/[\\/:*?"<>|]/g, "_");
+    const body = segments
+      .map((s) => (withTimestamp ? `**${fmt(s.start)}** ${s.text}` : s.text))
+      .join("\n");
+    const blob = new Blob([String.fromCharCode(0xfeff), body], {
+      type: withTimestamp ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName}.${withTimestamp ? "md" : "txt"}`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   /** 选择样式（官方模板或我的模板），重置为该模板的库内配置 */
@@ -700,13 +755,31 @@ export function SubtitleEditor({
           <p className="text-sm text-neutral-500">
             共 {segments.length} 段 · 点击行跳转播放
           </p>
-          <button
-            onClick={handleSave}
-            disabled={saving || !dirty}
-            className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => downloadScript(false)}
+              title="逐句一行的纯文本文稿，可直接用于公众号 / 笔记"
+              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+            >
+              文稿TXT
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadScript(true)}
+              title="带时间戳的 Markdown 文稿（**mm:ss** 句文本）"
+              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+            >
+              文稿MD
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !dirty}
+              className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
+            </button>
+          </div>
         </div>
         <p className="mt-1 text-xs text-neutral-400">
           快捷键：空格 播放/暂停 · ← → 快退/快进 2 秒 · Ctrl+S 保存
@@ -787,6 +860,56 @@ export function SubtitleEditor({
                   className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
                 >
                   撤销最近一次调整
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 查找替换（P2.11）：批量修正错别字 / 统一术语写法；纯前端替换，保存走统一 PUT */}
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setFindOpen((v) => !v)}
+            className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
+          >
+            {findOpen ? "收起查找替换 ▲" : "查找替换 ▼"}
+          </button>
+          {findOpen && (
+            <div className="mt-2 space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
+              <p className="text-xs text-neutral-400">
+                批量修正错别字或统一术语写法；替换只改本地预览，需点「保存修改」后才对导出生效
+              </p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                <input
+                  value={findText}
+                  onChange={(e) => setFindText(e.target.value)}
+                  placeholder="查找"
+                  className="w-40 rounded-lg border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-brand"
+                />
+                <span className="text-neutral-400">→</span>
+                <input
+                  value={replaceText}
+                  onChange={(e) => setReplaceText(e.target.value)}
+                  placeholder="替换为（留空即删除）"
+                  className="w-40 rounded-lg border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-brand"
+                />
+                <button
+                  type="button"
+                  disabled={!findText || findMatchCount === 0}
+                  onClick={replaceAllMatches}
+                  className="rounded-lg border border-neutral-200 px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
+                >
+                  {findText ? `全部替换（${findMatchCount} 段命中）` : "全部替换"}
+                </button>
+              </div>
+              {tlUndo && (
+                <button
+                  type="button"
+                  onClick={undoTimeline}
+                  className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
+                >
+                  撤销最近一次批量调整
                 </button>
               )}
             </div>

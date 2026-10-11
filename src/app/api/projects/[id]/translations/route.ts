@@ -1,7 +1,8 @@
 /**
  * @file /api/projects/[id]/translations — 创建翻译任务 + 列出项目已有翻译（P2.4）
  * @description POST：为 READY 项目创建 LLM 字幕翻译任务（异步执行，付费点）。
- *              请求体：{ targetLang }（TRANSLATE_LANGUAGES 白名单内的语言代码）。
+ *              请求体：{ targetLang, style? }（TRANSLATE_LANGUAGES 白名单内的语言
+ *              代码；style 为翻译风格 TRANSLATE_STYLES 代码，白名单外回退 general）。
  *              计费按源字幕总字符数（每 1000 字符计 60 秒额度、最低 60 秒），
  *              创建时余额预检（402），成功后在流水线事务内条件扣减。
  *              同项目同语言仅一个版本（DB unique 约束）：已有进行中任务 → 409；
@@ -18,12 +19,12 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { startTranslation } from "@/lib/translate-pipeline";
 import { rateLimit } from "@/lib/rate-limit";
-import { TRANSLATE_LANGUAGES, translateLangLabel, translateCostSeconds, TRANSLATE_RATE_LIMIT_PER_HOUR } from "@/lib/constants";
+import { TRANSLATE_LANGUAGES, normalizeTranslateStyle, translateLangLabel, translateCostSeconds, TRANSLATE_RATE_LIMIT_PER_HOUR } from "@/lib/constants";
 import type { StoredSegment } from "@/lib/asr/types";
 
 /**
  * 创建翻译任务
- * @param request 请求体 { targetLang: string }
+ * @param request 请求体 { targetLang: string, style?: string }
  * @param params  路由参数（Promise<{ id: string }>）
  */
 export async function POST(
@@ -43,8 +44,9 @@ export async function POST(
   }
 
   const { id } = await params;
-  const body = (await request.json().catch(() => ({}))) as { targetLang?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { targetLang?: unknown; style?: unknown };
   const targetLang = typeof body.targetLang === "string" ? body.targetLang : "";
+  const style = normalizeTranslateStyle(body?.style);
   const langLabel = translateLangLabel(targetLang);
   if (!langLabel) {
     return NextResponse.json(
@@ -98,7 +100,7 @@ export async function POST(
 
   const task = await db.$transaction(async (tx) => {
     if (existing) await tx.translation.delete({ where: { id: existing.id } });
-    return tx.translation.create({ data: { projectId: id, targetLang } });
+    return tx.translation.create({ data: { projectId: id, targetLang, style } });
   });
   void startTranslation(task.id, user.id);
 
@@ -133,6 +135,7 @@ export async function GET(
     select: {
       id: true,
       targetLang: true,
+      style: true,
       status: true,
       charCount: true,
       costSeconds: true,

@@ -17,7 +17,7 @@ import { logger } from "@/lib/logger";
 import { sendAlert } from "@/lib/alert";
 import { notify } from "@/lib/notify";
 import { translateSegments } from "@/lib/translate";
-import { translateLangLabel, translateCostSeconds } from "@/lib/constants";
+import { parseHotwords, translateLangLabel, translateCostSeconds, translateStyleOf } from "@/lib/constants";
 import { enqueueTranslation } from "@/lib/queue/queues";
 import type { StoredSegment } from "@/lib/asr/types";
 
@@ -85,10 +85,15 @@ export async function processTranslation(taskId: string): Promise<void> {
 
   await db.translation.update({ where: { id: taskId }, data: { status: "PROCESSING" } });
 
-  // ② 分批 LLM 翻译（失败抛错走重试；无兜底——付费产物不交付半成品）
+  // ② 分批 LLM 翻译（失败抛错走重试；无兜底——付费产物不交付半成品）。
+  //    P2.11：任务创建时的风格快照注入 system prompt；项目热词作为术语表
+  //    注入（全片译法统一，品牌/产品名保留原文）
   const texts = sourceSegments.map((s) => s.text);
   const charCount = texts.reduce((n, t) => n + t.length, 0);
-  const translated = await translateSegments(texts, task.targetLang, langLabel);
+  const translated = await translateSegments(texts, task.targetLang, langLabel, {
+    styleInstruction: translateStyleOf(task.style).instruction,
+    glossary: parseHotwords(project.hotwords),
+  });
 
   // ③ 组装翻译分段：时间轴逐行对齐源分段，文本替换为译文
   const segments: TranslatedSegment[] = sourceSegments.map((s, i) => ({

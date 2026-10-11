@@ -78,6 +78,12 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **P2.10 OCR 硬字幕提取**（`docs/ROADMAP.md` 后置项）：新建项目可选「提取画面字幕」
       ——qwen3-vl-plus 逐帧识别画面已有字幕（1fps 抽帧 600 帧封顶），相邻帧聚合时间轴，
       润色/导出/翻译全链路复用；计费与转写同价按视频时长，音频项目强制语音转写
+- [x] **P2.11 识别设置与编辑器增强**：上传时可选「识别设置」——场景预设
+      （通用/技术讲解/直播带货/课堂讲课）、识别主语言（中/粤/英/日/韩/自动检测）、
+      自定义热词（≤50 个，注入润色纠错与翻译术语表）；ASR 层语种透传 + 数字规范化 ITN；
+      润色断句增强（语气词清理 + 场景化纠错）；编辑器新增查找替换（命中计数 + 撤销）
+      与文稿导出（TXT 逐句一行 / 带时间戳 Markdown）；翻译卡新增风格选择
+      （通用/口语化/短视频精简，随任务快照存储）
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -354,6 +360,48 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   失败（与 ASR 无语音同语义）
 - **E2E**：[scripts/e2e-ocr-test.mjs](scripts/e2e-ocr-test.mjs)（18 断言——含 FFmpeg
   drawtext 造硬字幕视频，注意 drawtext 必须放在 concat 之后，输入段是局部时间轴）
+
+### 识别设置说明（P2.11）
+
+- **入口**：新建项目页「识别设置」区（仅语音转写模式显示场景/语言；OCR 模式仅热词——
+  热词对 OCR 项目的润色纠错同样生效）；字段随 complete 请求入库
+  （`Project.scene / language / hotwords`，服务端白名单清洗，非法值回退默认）
+- **场景预设**：[src/lib/constants.ts](src/lib/constants.ts) `ASR_SCENES` 四档
+  （通用/技术讲解/直播带货/课堂讲课），每档带场景描述文本，注入 AI 润色纠错 prompt
+  （让模型知道该按哪个领域的术语习惯纠错）
+- **识别主语言**：`ASR_LANGUAGES` 六档（中/粤/英/日/韩/自动检测），透传 DashScope
+  `asr_options.language`；「自动检测」不传语言参数交给服务端判定
+- **数字规范化 ITN**：`asr_options.enable_itn` 默认开启（「一百二十三」→「123」，
+  短视频字幕惯例）
+- **自定义热词**：逗号/顿号/分号/换行拆分、去重、≤50 个、单词 ≤30 字
+  （`parseHotwords`）；三处生效——润色纠错 prompt（按标准写法纠正同音字）、
+  翻译术语表（全片译法统一、品牌名保留原文）、filetrans 语境语料（见下）
+- **ASR 语境增强的实测边界**：qwen3-asr-flash OpenAI 兼容模式（dashscope.aliyuncs.com）
+  **实测拒绝 system message**（`InternalError.Algo.InvalidParameter`，与官方文档描述不符），
+  同步模式的场景/热词不在 ASR 层注入，全部由润色纠错 prompt 承担（qwen-flash 常规
+  chat 模型无限制）；生产 filetrans 走原生协议 `parameters.corpus` + `parameters.language`
+  （注意：语言参数是 string，不是 paraformer 时代的 language_hints 数组），待部署后实测
+- **润色断句增强**：[src/lib/polish.ts](src/lib/polish.ts) 在既有「严格句数不变」契约上
+  新增纯语气词清理（单独的「呃」「嗯」「啊」可删）与场景/热词纠错指令；增强失败
+  回退原文（不阻断转写）
+- **上传页注意（React 陷阱）**：选择/拖放文件必须先 `Array.from()` 快照再 setState——
+  React 的 setState updater 延迟到渲染期执行，若直接传 `e.target.files` 并在 onChange
+  里重置 `input.value`，updater 迭代到已清空的 FileList 会出现「选了文件但列表没反应」
+
+### 编辑器增强与翻译风格说明（P2.11）
+
+- **查找替换**（[subtitle-editor.tsx](src/app/project/[id]/subtitle-editor.tsx)）：
+  右列「查找替换 ▼」折叠面板——查找词实时显示命中段数，「全部替换」前自动快照
+  （与时间轴批量调整共用「撤销最近一次批量调整」，保留一步）；替换为空 = 删除匹配文本；
+  纯前端计算，保存复用统一 PUT 链路
+- **文稿导出**：右列头部「文稿TXT / 文稿MD」按钮——TXT 逐句一行（公众号/笔记直接用）、
+  MD 为「**mm:ss.d** 句文本」带时间戳格式；下载内容带 UTF-8 BOM（Windows 记事本/
+  Excel 不乱码），文件名取项目标题并清洗 Windows 非法字符
+- **翻译风格**（[translate-card.tsx](src/app/project/[id]/translate-card.tsx)）：
+  语言 chips 下新增风格三档（通用/口语化/短视频精简，`TRANSLATE_STYLES`），随翻译任务
+  快照存储（`Translation.style`，重新翻译可换风格）；风格指令注入每批翻译的
+  system prompt；项目热词自动作为术语表注入（全片译法统一，品牌/产品/人名保留原文）；
+  同语言重新翻译覆盖旧版本（语义 = 换风格重译）
 
 ### CI 说明（P1.7）
 

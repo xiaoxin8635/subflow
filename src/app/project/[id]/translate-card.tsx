@@ -1,7 +1,8 @@
 "use client";
 /**
  * @file 字幕翻译卡（P2.4）：项目详情页 READY 态展示
- * @description 功能：选择目标语言发起 LLM 翻译（付费，按源字幕字数计费）；
+ * @description 功能：选择目标语言与翻译风格发起 LLM 翻译（付费，按源字幕字数计费；
+ *              P2.11 风格随任务快照存储，项目热词自动作为术语表注入）；
  *              展示项目全部翻译任务状态（进行中轮询推进 / 已完成提供
  *              SRT/VTT/ASS 三格式下载 + 双语 SRT/ASS 下载（原文在上、译文在下，
  *              P2.7）/ 失败展示原因并可重试；已完成语言可「重新翻译」覆盖旧版本）。
@@ -10,12 +11,13 @@
  *              客户端额度估算仅作展示，实际以服务端下单时字数为准。
  */
 import { useCallback, useEffect, useState } from "react";
-import { TRANSLATE_LANGUAGES, translateCostSeconds } from "@/lib/constants";
+import { TRANSLATE_LANGUAGES, TRANSLATE_STYLES, translateCostSeconds } from "@/lib/constants";
 
 /** 翻译任务行（GET /api/projects/[id]/translations 响应元素） */
 interface TranslationRow {
   id: string;
   targetLang: string;
+  style?: string;
   status: "PENDING" | "PROCESSING" | "DONE" | "FAILED";
   charCount: number | null;
   costSeconds: number | null;
@@ -41,6 +43,7 @@ export function TranslateCard({
 }) {
   const [translations, setTranslations] = useState<TranslationRow[] | null>(null);
   const [selected, setSelected] = useState<string>("en");
+  const [style, setStyle] = useState<string>("general");
   const [starting, setStarting] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -80,7 +83,7 @@ export function TranslateCard({
       const res = await fetch(`/api/projects/${projectId}/translations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetLang: lang }),
+        body: JSON.stringify({ targetLang: lang, style }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -125,6 +128,24 @@ export function TranslateCard({
             }`}
           >
             {l.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 翻译风格（P2.11）：随任务快照存储，重新翻译可换风格 */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm text-neutral-500">风格</span>
+        {TRANSLATE_STYLES.map((s) => (
+          <button
+            key={s.code}
+            type="button"
+            title={s.instruction}
+            onClick={() => setStyle(s.code)}
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              style === s.code ? chipActive : chipIdle
+            }`}
+          >
+            {s.label}
           </button>
         ))}
       </div>
