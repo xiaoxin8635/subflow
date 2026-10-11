@@ -59,6 +59,10 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       `INVITE_REWARD`/`INVITEE_BONUS` 双流水）；邀请页展示码/复制链接/统计/脱敏
       记录，登录页支持 `?ref=` 自动带码，无效码静默忽略不阻断注册，同一账号
       仅可被邀请一次（unique 防刷）
+- [x] **P2.6 片段导出**（`docs/ROADMAP.md` 第三期）：选时间段裁剪导出——视频项目
+      FFmpeg `-ss/-t` 裁剪+烧录字幕（字幕时间轴自动 clamp 到片段并平移至 0 起，
+      区间无字幕则纯裁剪），音频项目纯裁剪输出 mp3；按片段时长 1:1 计费
+      （`CONSUME_CLIP` 流水），整片导出链路不受影响（回归 E2E 覆盖）
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -225,6 +229,22 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   填充邀请码输入框；工作台顶栏「邀请好友」入口
 - **API**：`GET /api/invite`（邀请码 + 奖励规则 + 统计 + 记录列表，手机号脱敏）
 
+### 片段导出说明（P2.6）
+
+- **入口**：编辑器导出卡勾选「只导出片段」，输入起止秒（「当前」按钮一键填入
+  播放器进度）；音频项目直接提供片段裁剪表单（无样式语义，输出 mp3）
+- **视频片段**：FFmpeg `-ss {start} -i 源 -t {dur}` 裁剪 + `ass` 滤镜烧录——
+  字幕行 clamp 到片段区间并平移至 0 起（跨边界行截断保留可见部分），
+  区间内无字幕行则不挂滤镜退化为纯裁剪（[src/lib/export-pipeline.ts](src/lib/export-pipeline.ts)）
+- **音频片段**：`sliceAudio` 纯裁剪，统一重编码输出 mp3（兼容性最好）；
+  整片对音频项目仍拒绝（无烧录语义）
+- **计费**：按片段时长 1:1（`clipCostSeconds` = ceil(end−start)，最低 1 秒），
+  创建时余额预检（402），成功后事务内条件扣减 + `CreditLedger(reason=CONSUME_CLIP)`；
+  整片导出计费与流水（`CONSUME_EXPORT`）不变
+- **任务模型**：复用 `ExportTask`（新增可空 `startSec/endSec`，null = 整片），
+  同项目同时仅一个导出任务（409）不变；下载文件名片段为
+  `原名_片段_5-15s.mp4`（音频 `.mp3`），Content-Type 按格式区分
+
 ### CI 说明（P1.7）
 
 - `.github/workflows/ci.yml`：push/PR 到 main 自动触发，两个 job：
@@ -341,6 +361,11 @@ node scripts/e2e-translate-test.mjs
 # P2.5 邀请裂变专项：未登录 401 → 首访懒生成邀请码 → 带码注册双方发奖（余额/流水/记录）
 # → 老用户带码无效 → 无效码静默 → invitee unique 防刷 → 邀请页/登录页/工作台 SSR
 node scripts/e2e-invite-test.mjs
+
+# P2.6 片段导出专项：参数校验 → 402 → 音频片段 mp3 / 视频片段烧录（真 FFmpeg 裁剪）
+# → 无字幕区间纯裁剪 → 409/越权 → 整片导出回归（本地 FFmpeg，零 API 费用；
+#   注意被测服务须以 STORAGE_DRIVER=local 启动）
+node scripts/e2e-clip-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts

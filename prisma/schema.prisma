@@ -206,6 +206,9 @@ model ExportTask {
   styleId     String?
   styleConfig Json? // 创建任务时的样式快照（烧录以此为准；官方/个人模板后续被删改不影响本任务）
   resolution  String     @default("720p")
+  // 片段导出（P2.6）：起止秒（可空 = 整片导出）；音频项目片段为纯裁剪（无样式语义）
+  startSec    Float?
+  endSec      Float?
   status      TaskStatus @default(PENDING)
   outputKey   String? // 导出产物的存储 key
   error       String? // 失败原因

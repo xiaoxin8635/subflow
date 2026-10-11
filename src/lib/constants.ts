@@ -101,6 +101,18 @@ export function translateCostSeconds(charCount: number): number {
 /** 翻译任务限流：每用户每小时最多发起次数（防 LLM 成本被刷） */
 export const TRANSLATE_RATE_LIMIT_PER_HOUR = 10;
 
+/**
+ * 片段导出计费（P2.6 付费点）：按片段时长 1:1 计费（向上取整，最低 1 秒）
+ * 无起收价——FFmpeg 裁剪是本地计算，边际成本即片段时长本身；
+ * 整片导出（ceil(durationSec)）等价于 start=0、end=时长 的特例，语义一致
+ * @param startSec 片段开始（秒）
+ * @param endSec   片段结束（秒，须大于 startSec）
+ * @returns 应扣减的额度（秒）
+ */
+export function clipCostSeconds(startSec: number, endSec: number): number {
+  return Math.max(1, Math.ceil(endSec - startSec));
+}
+
 /** 邀请奖励（P2.5 邀请裂变）：邀请人每邀 1 名新用户获得的额度（秒），可用环境变量覆盖 */
 export const INVITE_REWARD_INVITER_SECONDS = Number(process.env.INVITE_REWARD_INVITER_SECONDS ?? 600);
 

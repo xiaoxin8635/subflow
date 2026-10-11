@@ -36,6 +36,9 @@ export async function GET(
       error: task.error,
       outputKey: task.outputKey,
       resolution: task.resolution,
+      // 片段导出（P2.6）：起止秒；整片导出为 null
+      startSec: task.startSec,
+      endSec: task.endSec,
       createdAt: task.createdAt,
       finishedAt: task.finishedAt,
       projectTitle: task.project.title,

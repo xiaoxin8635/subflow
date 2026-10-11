@@ -619,6 +619,7 @@ export function SubtitleEditor({
           }
           dirty={dirty}
           mediaKind={mediaKind}
+          getCurrentTime={() => videoRef.current?.currentTime ?? 0}
         />
       </div>
 
