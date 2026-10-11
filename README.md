@@ -50,6 +50,10 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **P2.3 时间轴批量调整**（`docs/ROADMAP.md` 第三期）：字幕整体与语音不同步时，
       编辑器内一键整体偏移（±30s，起点越界拒绝）或整体伸缩（0.5-2 倍，
       以首行起点为锚），支持一步撤销；纯前端计算，保存复用统一 PUT 链路
+- [x] **P2.4 字幕翻译**（`docs/ROADMAP.md` 第三期）：整份字幕一键翻译为目标语言
+      （英/日/韩/西/葡/繁中，qwen-flash 分批调用），时间轴与原文逐行对齐；
+      按源字幕字数计费（每 1000 字 60 秒额度、最低 60 秒），SRT/VTT/ASS 三格式
+      下载；独立翻译队列（Worker 并发可调）+ 完成站内通知 + 同语言进行中 409
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -176,6 +180,29 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - 调整只改本地预览（标记未保存），与逐行编辑共用「保存修改」（PUT 全量校验），
   导出前须保存——与现有 dirty 拦截逻辑一致
 
+### 字幕翻译说明（P2.4）
+
+- **入口**：项目详情页「字幕翻译」卡（READY 态展示，视频/音频项目均可用），
+  选择目标语言后一键发起，进行中任务 3 秒轮询自动推进
+- **支持语言**：英语 / 日语 / 韩语 / 西班牙语 / 葡萄牙语 / 繁体中文
+  （[src/lib/constants.ts](src/lib/constants.ts) `TRANSLATE_LANGUAGES` 白名单）
+- **翻译链路**：读源转写分段 → 按 40 句一批调 qwen-flash（DashScope 兼容模式，
+  [src/lib/translate.ts](src/lib/translate.ts)）→ 时间轴不变、文本替换为译文；
+  中文关键词高亮不适用于译文故不保留。**翻译是付费产物，LLM 失败直接抛错**
+  走队列重试（与润色的静默降级语义相反），绝不交付原文
+- **计费**：按源字幕总字符数（每 1000 字 60 秒额度、最低 60 秒）；创建时余额
+  预检（402），成功后事务内条件扣减（防并发负数）+ 写
+  `CreditLedger(reason=CONSUME_TRANSLATE)`；失败不扣费
+- **版本语义**：同项目同语言仅一个版本（DB unique 约束）——进行中重复发起 409；
+  已终态（DONE/FAILED）重新发起即覆盖重建
+- **API**：`POST/GET /api/projects/[id]/translations`（创建 / 列表）、
+  `GET /api/translations/[id]`（状态轮询）、
+  `GET /api/translations/[id]/[format]`（srt|vtt|ass 下载，文件名含语言代码；
+  ASS 使用系统默认样式）；全部本人校验（非本人统一 404）
+- **限流**：每用户每小时最多 10 次翻译创建（LLM 有真金白银成本，防刷）
+- **队列**：独立 `translate` 队列，Worker 并发 `TRANSLATE_CONCURRENCY`（默认 2）；
+  重试用尽标记 FAILED 并钉钉告警，完成/失败均写站内通知
+
 ### CI 说明（P1.7）
 
 - `.github/workflows/ci.yml`：push/PR 到 main 自动触发，两个 job：
@@ -284,6 +311,10 @@ node scripts/e2e-audio-test.mjs
 # → 我的模板烧录导出 → 快照独立性 → 微调 styleConfig 所见即所得 → ASS 带 userStyleId
 # （注意：STORAGE_DRIVER=oss 时请以 `STORAGE_DRIVER=local npm start` 启动被测服务）
 node scripts/e2e-user-style-test.mjs
+
+# P2.4 字幕翻译专项：语言白名单 → 余额 402 → 真实翻译两语言（调用 DashScope，约几分钱）
+# → 三格式下载 → 计费/流水/通知 → 同语言 409 → 越权 → 限流 429（注入 PENDING 零 LLM 成本）
+node scripts/e2e-translate-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts

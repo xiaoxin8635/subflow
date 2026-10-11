@@ -12,7 +12,9 @@ export type NotificationType =
   | "TRANSCRIBE_DONE"
   | "TRANSCRIBE_FAILED"
   | "EXPORT_DONE"
-  | "EXPORT_FAILED";
+  | "EXPORT_FAILED"
+  | "TRANSLATE_DONE"
+  | "TRANSLATE_FAILED";
 
 /**
  * 写一条站内通知（容错：失败仅落日志）

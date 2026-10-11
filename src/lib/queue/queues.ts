@@ -13,6 +13,8 @@ import { getRedis } from "@/lib/queue/connection";
 export const TRANSCRIPT_QUEUE_NAME = "transcript";
 /** 导出队列名（FFmpeg 烧录，CPU 密集） */
 export const EXPORT_QUEUE_NAME = "export";
+/** 翻译队列名（LLM 批量翻译，IO 密集，P2.4） */
+export const TRANSLATE_QUEUE_NAME = "translate";
 
 /** 免费用户优先级（数字越小越先消费） */
 const PRIORITY_FREE = 10;
@@ -118,6 +120,31 @@ export async function enqueueExport(taskId: string, userId: string): Promise<boo
     return true;
   } catch (e) {
     console.warn("[queue] 导出任务入队失败（将降级进程内执行）：", e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+/**
+ * 翻译任务入队；失败返回 false（调用方降级为进程内直跑）
+ * @param taskId Translation ID
+ * @param userId 用户 ID（用于优先级计算）
+ * @returns 是否成功入队
+ */
+export async function enqueueTranslation(taskId: string, userId: string): Promise<boolean> {
+  try {
+    const queue = getQueue(TRANSLATE_QUEUE_NAME);
+    await queue.add(
+      "translate",
+      { taskId },
+      {
+        jobId: `translate-${taskId}`,
+        priority: await priorityForUser(userId),
+        attempts: 2, // 付费任务，LLM 调用有成本，失败重试 1 次即可（与导出对齐）
+      },
+    );
+    return true;
+  } catch (e) {
+    console.warn("[queue] 翻译任务入队失败（将降级进程内执行）：", e instanceof Error ? e.message : e);
     return false;
   }
 }

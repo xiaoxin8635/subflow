@@ -15,6 +15,7 @@ import {
 } from "@/lib/browser-notify";
 import { SubtitleEditor } from "./subtitle-editor";
 import type { EditorSegment } from "./subtitle-editor";
+import { TranslateCard } from "./translate-card";
 
 /** 详情接口返回的项目结构（与 /api/projects/[id] GET 响应一致） */
 export interface ProjectDetail {
@@ -177,20 +178,27 @@ export function ProjectLiveView({
         </div>
       )}
 
-      {/* 字幕编辑器（READY） */}
+      {/* 字幕编辑器 + 翻译卡（READY） */}
       {project.status === "READY" &&
         (segments.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
             <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
         ) : (
-          <SubtitleEditor
-            projectId={projectId}
-            projectTitle={project.title}
-            initialSegments={segments}
-            durationSec={project.durationSec ?? 0}
-            mediaKind={project.mediaKind ?? "video"}
-          />
+          <>
+            <SubtitleEditor
+              projectId={projectId}
+              projectTitle={project.title}
+              initialSegments={segments}
+              durationSec={project.durationSec ?? 0}
+              mediaKind={project.mediaKind ?? "video"}
+            />
+            {/* 翻译卡：预估字数取当前源字幕总字符数 */}
+            <TranslateCard
+              projectId={projectId}
+              charCount={segments.reduce((n, s) => n + s.text.length, 0)}
+            />
+          </>
         ))}
     </div>
   );

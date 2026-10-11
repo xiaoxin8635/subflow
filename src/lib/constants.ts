@@ -62,3 +62,41 @@ export const API_ROUTES = {
 
 /** 由项目 ID 拼接详情路由 */
 export const projectApi = (id: string): string => `/api/projects/${id}`;
+
+/**
+ * 字幕翻译支持的目标语言（P2.4）：code 为 LLM 提示词与 API 参数用的语言代码，
+ * label 为界面展示名；顺序即语言下拉框顺序
+ */
+export const TRANSLATE_LANGUAGES = [
+  { code: "en", label: "英语" },
+  { code: "ja", label: "日语" },
+  { code: "ko", label: "韩语" },
+  { code: "es", label: "西班牙语" },
+  { code: "pt", label: "葡萄牙语" },
+  { code: "zh-TW", label: "繁体中文" },
+] as const;
+
+/** 翻译目标语言代码类型（供 API 白名单校验与前端类型约束共用） */
+export type TranslateLangCode = (typeof TRANSLATE_LANGUAGES)[number]["code"];
+
+/**
+ * 按 charCount 查询语言白名单中的展示名
+ * @param code 语言代码
+ * @returns 展示名（未命中返回 null）
+ */
+export function translateLangLabel(code: string): string | null {
+  return TRANSLATE_LANGUAGES.find((l) => l.code === code)?.label ?? null;
+}
+
+/**
+ * 翻译计费（P2.4 付费点）：每 1000 源字符计 60 秒额度，最低按 60 秒起收
+ * （与一次最短转写同价，保证小额消费也有计费意义）
+ * @param charCount 源字幕总字符数（不含时间轴）
+ * @returns 应扣减的额度（秒），向上取整
+ */
+export function translateCostSeconds(charCount: number): number {
+  return Math.max(60, Math.ceil((charCount / 1000) * 60));
+}
+
+/** 翻译任务限流：每用户每小时最多发起次数（防 LLM 成本被刷） */
+export const TRANSLATE_RATE_LIMIT_PER_HOUR = 10;

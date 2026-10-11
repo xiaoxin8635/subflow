@@ -28,6 +28,8 @@ const TYPE_META: Record<string, { icon: string; tone: string }> = {
   TRANSCRIBE_FAILED: { icon: "❌", tone: "text-red-500" },
   EXPORT_DONE: { icon: "🎬", tone: "text-green-600" },
   EXPORT_FAILED: { icon: "⚠️", tone: "text-red-500" },
+  TRANSLATE_DONE: { icon: "🌐", tone: "text-green-600" },
+  TRANSLATE_FAILED: { icon: "⚠️", tone: "text-red-500" },
 };
 
 /** 轮询间隔（毫秒） */

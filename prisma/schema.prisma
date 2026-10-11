@@ -126,6 +126,7 @@ model Project {
   user        User          @relation(fields: [userId], references: [id])
   transcript  Transcript?
   exportTasks ExportTask[]
+  translations Translation[]
 
   @@index([userId, updatedAt])
 }
@@ -194,6 +195,29 @@ model ExportTask {
   style   Style?  @relation(fields: [styleId], references: [id])
 
   @@index([projectId])
+}
+
+// ---------------------------------------------------------------------
+// 字幕翻译任务（P2.4）：LLM 批量翻译整项目字幕为目标语言；
+// segments 为翻译后分段（时间不变、text 为译文、keywords 不保留）；
+// 同项目同语言仅一个版本（unique 约束，重新翻译覆盖旧行）
+// ---------------------------------------------------------------------
+model Translation {
+  id          String     @id @default(cuid())
+  projectId   String
+  targetLang  String // 目标语言代码（见 constants.ts TRANSLATE_LANGUAGES）
+  status      TaskStatus @default(PENDING)
+  segments    Json? // 翻译后分段 [{ start, end, text }]（完成时写入）
+  charCount   Int? // 源字幕总字符数（计费依据快照）
+  costSeconds Int? // 实际扣减额度（秒，成功后回填）
+  error       String? // 失败原因
+  createdAt   DateTime   @default(now())
+  finishedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, targetLang])
+  @@index([projectId, createdAt])
 }
 
 // ---------------------------------------------------------------------
