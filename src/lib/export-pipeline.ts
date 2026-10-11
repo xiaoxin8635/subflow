@@ -8,6 +8,10 @@
  *              片段导出（P2.6）：startSec/endSec 非空时按区间裁剪——视频项目
  *              `-ss/-t` 裁剪 + 烧录（字幕时间轴 clamp 到片段并平移至 0 起），
  *              音频项目纯裁剪统一输出 mp3（sliceAudio）。
+ *              双语烧录（P2.7）：targetLang 非空时读取该项目该语言已完成的
+ *              Translation.segments（P2.4 保证与原文索引/时间轴逐行对齐），
+ *              在片段 clamp 之前按索引把译文以换行并入原文文本（原文在上、
+ *              译文在下，同一 Dialogue 双行），随后复用单语的全部烧录逻辑。
  *              成功后在单个事务内完成任务置 DONE + 扣减额度 + 写额度流水
  *              （整片 CONSUME_EXPORT / 片段 CONSUME_CLIP）。
  *              入口 startExport 仅负责入队（BullMQ 导出队列）；Redis 不可用时降级
@@ -35,6 +39,7 @@ import { enqueueExport } from "@/lib/queue/queues";
 import { ensureLocalVideo, isOss, removeLocalVideoCache } from "@/lib/storage";
 import { ossUploadFile } from "@/lib/oss";
 import type { StoredSegment } from "@/lib/asr/types";
+import type { TranslatedSegment } from "@/lib/translate-pipeline";
 
 /** 导出产物目录（与上传目录同级：uploads/exports/） */
 const EXPORTS_SUBDIR = "exports";
@@ -137,6 +142,10 @@ export async function processExport(taskId: string): Promise<void> {
     if (project.mediaKind === "audio" && !isClip) {
       throw new Error("音频项目不支持整片烧录成片（仅字幕文件下载或片段裁剪）");
     }
+    // 双语仅对视频烧录有意义；音频项目绝不应携带 targetLang（创建接口已拦，此处兜底）
+    if (project.mediaKind === "audio" && task.targetLang) {
+      throw new Error("音频项目不支持双语烧录");
+    }
     const segments = Array.isArray(project.transcript.segments)
       ? (project.transcript.segments as StoredSegment[])
       : [];
@@ -152,15 +161,34 @@ export async function processExport(taskId: string): Promise<void> {
     // ② 视频烧录分支：片段时字幕时间轴 clamp 到片段区间并平移至 0 起
     //    （区间内无字幕行则不挂 ass 滤镜，退化为纯裁剪）
     if (!isAudioClip) {
+      // 双语合并（P2.7）：按索引把译文以真实换行并入原文文本（原文在上、译文在下）。
+      // 必须在片段 clamp 之前做——clamp 的 filter 会改变行序集合，而译文按原始索引对齐。
+      // 译文实时读取（非创建时快照）：翻译被重新发起覆盖后，未开始的任务按最新版本烧录。
+      let sourceSegments: StoredSegment[] = segments;
+      if (task.targetLang) {
+        const translation = await db.translation.findUnique({
+          where: {
+            projectId_targetLang: { projectId: project.id, targetLang: task.targetLang },
+          },
+        });
+        if (!translation || translation.status !== "DONE" || !Array.isArray(translation.segments)) {
+          throw new Error(`双语字幕的译文不可用（${task.targetLang} 翻译未完成或已失效），请先完成该语言翻译`);
+        }
+        const translated = translation.segments as TranslatedSegment[];
+        sourceSegments = segments.map((s, i) => {
+          const transText = typeof translated[i]?.text === "string" ? translated[i]!.text.trim() : "";
+          return transText ? { ...s, text: `${s.text}\n${transText}` } : s;
+        });
+      }
       const burnSegments: StoredSegment[] = isClip
-        ? segments
+        ? sourceSegments
             .map((s) => ({
               ...s,
               start: Math.max(0, s.start - clipStart),
               end: Math.min(clipDur, s.end - clipStart),
             }))
             .filter((s) => s.end - s.start > 0.01)
-        : segments;
+        : sourceSegments;
       const styleForBurn =
         parseStyleConfig(task.styleConfig) ??
         parseStyleConfig(style?.config) ??
@@ -248,10 +276,11 @@ export async function processExport(taskId: string): Promise<void> {
         data: { status: "DONE", outputKey: `${EXPORTS_SUBDIR}/${taskId}.${outExt}`, finishedAt: new Date(), error: null },
       });
     });
-    logger.info("export", "导出任务完成", { taskId, title: project.title, costSeconds, isClip });
+    logger.info("export", "导出任务完成", { taskId, title: project.title, costSeconds, isClip, targetLang: task.targetLang });
     // 站内通知：导出完成（铃铛提醒，旁路失败不影响主流程）
     const rangeLabel = isClip ? `片段 ${clipFileLabel(clipStart, clipStart + clipDur)}` : "成片";
-    await notify(project.userId, "EXPORT_DONE", "导出完成", `「${project.title}」${rangeLabel}已导出（消耗 ${costSeconds} 秒额度）`, `/project/${project.id}`);
+    const langLabel = task.targetLang ? `（双语·${task.targetLang}）` : "";
+    await notify(project.userId, "EXPORT_DONE", "导出完成", `「${project.title}」${rangeLabel}${langLabel}已导出（消耗 ${costSeconds} 秒额度）`, `/project/${project.id}`);
     // ⑤ oss 模式：事务成功后清理本地成片与源视频缓存副本（源视频保留在 OSS 供预览/再导出）
     if (isOss()) {
       await fs.unlink(outAbsPath).catch(() => {});

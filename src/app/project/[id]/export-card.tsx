@@ -1,10 +1,13 @@
 "use client";
 /**
- * @file 导出卡片（客户端组件）：整片烧录 / 片段裁剪导出（P2.6）
+ * @file 导出卡片（客户端组件）：整片烧录 / 片段裁剪导出（P2.6）/ 双语字幕（P2.7）
  * @description 视频项目：展示预计扣费与当前余额，可选「只导出片段」（输入起止秒，
  *              「当前」按钮读播放器进度），点击「导出视频」创建任务并轮询状态：
  *              idle → submitting → processing → done（下载按钮）/ failed（重试）。
  *              片段导出按片段时长计费（ceil(end-start)），整片按时长计费。
+ *              双语字幕（P2.7）：字幕语言选「双语」时携带 targetLang 创建任务，
+ *              烧录原文+译文同屏（原文在上、译文在下）；语言下拉仅列出已完成
+ *              翻译的语言，未完成任何翻译时提示先去翻译卡翻译。
  *              音频项目：无烧录语义，提供片段裁剪导出（输出 mp3，按片段时长计费）
  *              与字幕文件下载。
  *              余额不足（402）时引导去兑换页。字幕有未保存修改时禁止导出（导出读取库内数据）。
@@ -12,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { StyleConfig } from "@/lib/style-config";
-import { clipCostSeconds } from "@/lib/constants";
+import { clipCostSeconds, translateLangLabel } from "@/lib/constants";
 import {
   browserNotify,
   notificationPermission,
@@ -107,6 +110,9 @@ export function ExportCard({
   const [clipEnabled, setClipEnabled] = useState(mediaKind === "audio");
   const [clipStartStr, setClipStartStr] = useState("");
   const [clipEndStr, setClipEndStr] = useState("");
+  // 双语字幕（P2.7）：已完成翻译的语言（挂载时拉取）+ 双语目标语言（"" = 单语原文）
+  const [doneLangs, setDoneLangs] = useState<string[]>([]);
+  const [bilingualLang, setBilingualLang] = useState("");
   // 浏览器通知授权状态（SSR 首帧为 unsupported，挂载后读取真实值）
   const [perm, setPerm] = useState<string>("unsupported");
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,6 +167,28 @@ export function ExportCard({
       cancelled = true;
     };
   }, []);
+
+  // 挂载时拉取已完成翻译的语言列表（双语烧录选项；音频项目无烧录语义跳过）
+  useEffect(() => {
+    if (mediaKind === "audio") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/translations`, { cache: "no-store" });
+        if (!res.ok) return;
+        const body = (await res.json()) as { translations?: { targetLang: string; status: string }[] };
+        const langs = (body.translations ?? [])
+          .filter((t) => t.status === "DONE")
+          .map((t) => t.targetLang);
+        if (!cancelled) setDoneLangs(langs);
+      } catch {
+        // 翻译列表获取失败仅影响双语选项（后端创建时仍有校验兜底）
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, mediaKind]);
 
   // 轮询任务状态直至终态；卸载时清理
   useEffect(() => {
@@ -220,6 +248,8 @@ export function ExportCard({
           ...(clipEnabled && clipStart != null && clipEnd != null
             ? { startSec: clipStart, endSec: clipEnd }
             : {}),
+          // 双语字幕（P2.7）：选了双语语言时携带（仅视频项目有此选项）
+          ...(mediaKind !== "audio" && bilingualLang ? { targetLang: bilingualLang } : {}),
         }),
       });
       const body = (await res.json().catch(() => ({}))) as { taskId?: string; error?: string };
@@ -394,6 +424,48 @@ export function ExportCard({
           只导出片段（裁剪所选时间段，按片段时长计费）
         </label>
         {clipEnabled && clipInputs}
+
+        {/* 字幕语言（P2.7 双语）：原文 / 双语（原文+译文同屏，原文在上译文在下） */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+          <span className="text-neutral-500">字幕语言</span>
+          <label className="flex cursor-pointer items-center gap-1.5 text-neutral-600">
+            <input
+              type="radio"
+              name="subLang"
+              checked={!bilingualLang}
+              onChange={() => setBilingualLang("")}
+              className="accent-brand"
+            />
+            原文
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 text-neutral-600">
+            <input
+              type="radio"
+              name="subLang"
+              checked={!!bilingualLang}
+              onChange={() => setBilingualLang(doneLangs[0] ?? "")}
+              disabled={doneLangs.length === 0}
+              className="accent-brand disabled:cursor-not-allowed disabled:opacity-40"
+            />
+            双语（原文 + 译文）
+          </label>
+          {!!bilingualLang && (
+            <select
+              value={bilingualLang}
+              onChange={(e) => setBilingualLang(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+            >
+              {doneLangs.map((lang) => (
+                <option key={lang} value={lang}>
+                  {translateLangLabel(lang) ?? lang}
+                </option>
+              ))}
+            </select>
+          )}
+          {doneLangs.length === 0 && (
+            <span className="text-xs text-neutral-400">完成一次翻译后可烧录双语字幕（见下方翻译卡）</span>
+          )}
+        </div>
       </div>
       )}
 
@@ -437,7 +509,7 @@ export function ExportCard({
       {phase === "processing" && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-neutral-500">
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand/20 border-t-brand" />
-          FFmpeg 正在{clipEnabled ? "裁剪" : "烧录字幕"}，一般几秒到几分钟（取决于媒体长度）…
+          FFmpeg 正在{clipEnabled ? "裁剪" : bilingualLang ? "烧录双语字幕" : "烧录字幕"}，一般几秒到几分钟（取决于媒体长度）…
           {perm === "default" && (
             <button
               type="button"

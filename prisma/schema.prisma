@@ -209,6 +209,9 @@ model ExportTask {
   // 片段导出（P2.6）：起止秒（可空 = 整片导出）；音频项目片段为纯裁剪（无样式语义）
   startSec    Float?
   endSec      Float?
+  // 双语字幕（P2.7）：双语烧录的目标语言（可空 = 单语原文）；仅视频项目可用，
+  // 创建时校验该语言翻译已完成，烧录时实时读取译文与原文逐行合并
+  targetLang  String?
   status      TaskStatus @default(PENDING)
   outputKey   String? // 导出产物的存储 key
   error       String? // 失败原因

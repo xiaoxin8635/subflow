@@ -4,6 +4,8 @@
  *              供 FFmpeg `ass` 滤镜烧录。坐标基准 PlayRes 1920x1080，
  *              fontSize 为 @1080p 高度百分比，marginV/outlineWidth 为 @1080p 像素。
  *              关键词高亮使用行内覆盖标签 {\c} 实现（与前端预览的 highlight 行为对齐）。
+ *              双语字幕（P2.7）：buildBilingualAss 将译文以 \N 第二行并入原文 Dialogue，
+ *              原文在上、译文在下，供双语烧录与双语 ASS 文件下载共用。
  */
 
 /** 样式配置契约（与 subtitle-overlay.tsx 中的定义一致） */
@@ -155,4 +157,29 @@ export function buildAss(config: AssStyleConfig, segments: AssSegment[]): string
     });
 
   return `${header}\n${dialogues.join("\n")}\n`;
+}
+
+/**
+ * 编译双语 ASS 文件（原文在上、译文在下）
+ * @description 双语采用同一 Dialogue 内 `\N` 双行——libass 对多行文本垂直堆叠、
+ *              按 position/marginV 整体锚定，上下行永不错位，时间轴天然同步；
+ *              关键词高亮标签只出现在原文行内并自行闭合，不影响译文行。
+ *              译文为空的行退化为单语原文。
+ * @param config          样式配置
+ * @param segments        原文字幕分段
+ * @param translatedTexts 译文文本数组（与 segments 按索引逐行对齐，
+ *                        来自 Translation.segments；索引越界/空串该行仅显示原文）
+ * @returns ASS 文件文本
+ */
+export function buildBilingualAss(
+  config: AssStyleConfig,
+  segments: AssSegment[],
+  translatedTexts: string[],
+): string {
+  const merged: AssSegment[] = segments.map((s, i) => {
+    const trans = typeof translatedTexts[i] === "string" ? translatedTexts[i].trim() : "";
+    if (!trans) return s;
+    return { ...s, text: `${s.text}\n${trans}` };
+  });
+  return buildAss(config, merged);
 }

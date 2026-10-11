@@ -6,9 +6,12 @@
  *              提供时以它为准（编辑器实时预览所见即所得），否则按所选模板的库内配置。
  *              startSec/endSec 同时提供时为片段导出（P2.6）：视频项目裁剪+烧录，
  *              音频项目纯裁剪（无样式语义，样式参数忽略）；缺省为整片烧录。
+ *              targetLang 可选（P2.7 双语字幕）：提供时按「原文+译文」双语烧录
+ *              （原文在上、译文在下），仅视频项目可用；该语言翻译必须已完成。
  *              最终配置以快照写入任务（styleConfig 列），烧录与模板后续删改解耦。
- *              校验链：登录 → 限流 → 片段参数形状 → 项目归属 → 状态就绪 →
- *              片段区间合法 → 样式合法（音频片段跳过）→ 余额预检（402）→
+ *              校验链：登录 → 限流 → 片段参数形状 → targetLang 形状 → 项目归属 →
+ *              状态就绪 → 片段区间合法 → 音频双语拦截 → 音频整片拦截 → 样式合法
+ *              （音频片段跳过）→ 译文已完成（双语时）→ 余额预检（402）→
  *              无进行中任务（409）。创建后 fire-and-forget 启动流水线。
  * 说明：Next.js 15+ 动态路由参数为 Promise，必须 await；
  *      Cache Components 模式下禁止 export const runtime 路由配置。
@@ -24,7 +27,7 @@ import type { StyleConfig } from "@/lib/style-config";
 
 /**
  * 创建导出任务
- * @param request 请求体 { styleId?, userStyleId?, styleConfig?, startSec?, endSec? }
+ * @param request 请求体 { styleId?, userStyleId?, styleConfig?, startSec?, endSec?, targetLang? }
  * @param params  路由参数（Promise<{ id: string }>）
  */
 export async function POST(
@@ -50,9 +53,18 @@ export async function POST(
     styleConfig?: unknown;
     startSec?: unknown;
     endSec?: unknown;
+    targetLang?: unknown;
   };
   const styleId = typeof body.styleId === "string" ? body.styleId : "";
   const userStyleId = typeof body.userStyleId === "string" ? body.userStyleId : "";
+  // 双语字幕（P2.7）：targetLang 提供时须为非空字符串（语言合法性在项目归属后校验）
+  let targetLang: string | null = null;
+  if (body.targetLang !== undefined && body.targetLang !== null && body.targetLang !== "") {
+    if (typeof body.targetLang !== "string" || !body.targetLang.trim()) {
+      return NextResponse.json({ error: "targetLang 必须是语言代码字符串" }, { status: 400 });
+    }
+    targetLang = body.targetLang.trim();
+  }
 
   // 片段参数（P2.6）：startSec/endSec 必须成对出现；形状校验先于项目归属（与语言白名单约定一致）
   const hasStart = body.startSec !== undefined;
@@ -96,6 +108,10 @@ export async function POST(
       { status: 400 },
     );
   }
+  // 双语（P2.7）仅对视频烧录有意义；音频项目携带 targetLang 直接拒绝（先于整片拦截，报因更精准）
+  if (project.mediaKind === "audio" && targetLang) {
+    return NextResponse.json({ error: "音频项目不支持双语烧录" }, { status: 400 });
+  }
   // 纯音频项目：整片无烧录语义仍拒绝；片段裁剪放行（纯裁剪无样式语义，样式参数忽略）
   if (project.mediaKind === "audio" && !isClip) {
     return NextResponse.json({ error: "音频项目不支持整片烧录成片，请使用字幕文件下载（SRT/VTT/ASS）或片段裁剪导出" }, { status: 400 });
@@ -104,6 +120,19 @@ export async function POST(
   const audioClip = isClip && project.mediaKind === "audio";
   if (!audioClip && !styleId && !userStyleId) {
     return NextResponse.json({ error: "缺少 styleId 或 userStyleId" }, { status: 400 });
+  }
+  // 双语：目标语言的翻译必须已完成（译文行与原文索引对齐是 P2.4 的产物契约）
+  if (targetLang) {
+    const translation = await db.translation.findUnique({
+      where: { projectId_targetLang: { projectId: id, targetLang } },
+      select: { status: true },
+    });
+    if (!translation || translation.status !== "DONE") {
+      return NextResponse.json(
+        { error: `「${targetLang}」翻译尚未完成，请先在翻译卡完成该语言翻译` },
+        { status: 400 },
+      );
+    }
   }
 
   // 样式解析：官方模板（styleId）或我的模板（userStyleId，本人校验）二选一；音频片段跳过
@@ -163,6 +192,7 @@ export async function POST(
       ...(resolvedConfig ? { styleConfig: resolvedConfig } : {}),
       resolution: "original",
       ...(isClip ? { startSec, endSec } : {}),
+      ...(targetLang ? { targetLang } : {}),
     },
   });
   void startExport(task.id, user.id);

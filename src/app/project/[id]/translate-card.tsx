@@ -3,8 +3,8 @@
  * @file 字幕翻译卡（P2.4）：项目详情页 READY 态展示
  * @description 功能：选择目标语言发起 LLM 翻译（付费，按源字幕字数计费）；
  *              展示项目全部翻译任务状态（进行中轮询推进 / 已完成提供
- *              SRT/VTT/ASS 三格式下载 / 失败展示原因并可重试；
- *              已完成语言可「重新翻译」覆盖旧版本）。
+ *              SRT/VTT/ASS 三格式下载 + 双语 SRT/ASS 下载（原文在上、译文在下，
+ *              P2.7）/ 失败展示原因并可重试；已完成语言可「重新翻译」覆盖旧版本）。
  *              数据源：GET /api/projects/[id]/translations（列表，含状态），
  *              存在进行中任务时每 3 秒轮询；发起 POST 创建任务。
  *              客户端额度估算仅作展示，实际以服务端下单时字数为准。
@@ -181,6 +181,20 @@ export function TranslateCard({
                       className="rounded-lg border border-black/10 px-2.5 py-1 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
                     >
                       ASS
+                    </a>
+                    <a
+                      href={`/api/translations/${t.id}/srt?bilingual=1`}
+                      title="原文在上、译文在下（每条字幕双行），可用于剪映等软件手动挂载"
+                      className="rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1 text-xs text-brand transition-colors hover:border-brand"
+                    >
+                      双语SRT
+                    </a>
+                    <a
+                      href={`/api/translations/${t.id}/ass?bilingual=1`}
+                      title="原文在上、译文在下（系统默认样式），可用于 mpv / PotPlayer 挂载或剪辑软件"
+                      className="rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1 text-xs text-brand transition-colors hover:border-brand"
+                    >
+                      双语ASS
                     </a>
                     <button
                       type="button"
