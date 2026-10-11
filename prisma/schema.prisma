@@ -146,6 +146,7 @@ model Project {
   language    String        @default("zh") // 识别主语言（P2.11 场景自适应）：zh/yue/en/ja/ko，auto=自动检测（不传 API 语言参数）
   scene       String        @default("general") // 识别场景预设（P2.11）：general/tech/live/course，注入 ASR Context 与润色 prompt
   hotwords    String? // 自定义热词（P2.11）：逗号分隔存储，注入 ASR Context、润色纠错与翻译术语
+  denoise     Boolean       @default(false) // 噪声抑制（P2.11）：抽取音频时叠加 FFmpeg afftdn 降噪滤镜（嘈杂环境录音建议开启）
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 

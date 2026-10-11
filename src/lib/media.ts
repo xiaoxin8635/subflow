@@ -59,11 +59,26 @@ export async function probeDurationSec(filePath: string): Promise<number> {
  * 从视频抽取音频：16kHz 单声道 mp3（48kbps，5 分钟约 1.8MB，Base64 后仍很小，适合 ASR）
  * @param videoPath 视频路径
  * @param outMp3    输出 mp3 路径
+ * @param opts      denoise: 噪声抑制（P2.11）——叠加 FFmpeg afftdn（FFT 自适应降噪）
+ *                  滤镜，适配嘈杂环境录音；默认关闭（干净音源降噪反而可能损伤语音细节）
  */
-export async function extractAudioToMp3(videoPath: string, outMp3: string): Promise<void> {
+export async function extractAudioToMp3(
+  videoPath: string,
+  outMp3: string,
+  opts: { denoise?: boolean } = {},
+): Promise<void> {
   await execFileAsync(
     FFMPEG,
-    ["-y", "-i", videoPath, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", outMp3],
+    [
+      "-y",
+      "-i", videoPath,
+      "-vn",
+      "-ac", "1",
+      "-ar", "16000",
+      "-b:a", "48k",
+      ...(opts.denoise ? ["-af", "afftdn"] : []),
+      outMp3,
+    ],
     { maxBuffer: MAX_BUFFER },
   );
 }

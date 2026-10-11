@@ -105,15 +105,21 @@ export function NewUploadClient() {
   const [uploading, setUploading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [processMode, setProcessMode] = useState<"asr" | "ocr">("asr");
-  // 识别设置（P2.11 场景自适应）：场景预设 / 识别主语言 / 自定义热词
+  // 识别设置（P2.11 场景自适应）：场景预设 / 识别主语言 / 自定义热词 / 噪声抑制
   const [scene, setScene] = useState<string>("general");
   const [language, setLanguage] = useState<string>("zh");
   const [hotwords, setHotwords] = useState("");
+  const [denoise, setDenoise] = useState(false);
 
   const hasInvalid = rows.some((r) => r.status === "pending" && !ACCEPT_TYPES[extOf(r.file)]);
   const oversize = (r: FileRow) => r.file.size > MAX_UPLOAD_BYTES;
   const doneCount = rows.filter((r) => r.status === "done").length;
-  const pendingRows = () => rows.filter((r) => r.status === "pending" || r.status === "canceled" || r.status === "failed");
+  // 最新 rows 镜像（latest ref）：handleUpload 为 async 长流程，结束后 pendingRows()
+  // 若读 state 闭包会拿到点击时刻的旧值（全部仍 pending），导致上传成功也不跳转
+  const rowsRef = useRef<FileRow[]>([]);
+  rowsRef.current = rows;
+  const pendingRows = () =>
+    rowsRef.current.filter((r) => r.status === "pending" || r.status === "canceled" || r.status === "failed");
 
   /** 追加文件（点击选择/拖拽共用）：去重、限流到 MAX_BATCH_FILES。
    *  必须传已快照的 File 数组——React 的 setState updater 延迟到渲染期才执行，
@@ -264,6 +270,7 @@ export function NewUploadClient() {
         scene,
         language,
         hotwords,
+        denoise, // 噪声抑制（P2.11）：asr 模式下勾选生效，音频项目同样适用
       }),
       signal,
     });
@@ -462,6 +469,23 @@ export function NewUploadClient() {
                 : "多个词用逗号分隔（最多 50 个）。画面字幕里的专有名词写错时，AI 润色会按这里的写法纠正"}
             </span>
           </label>
+
+          {processMode === "asr" && (
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={denoise}
+                onChange={(e) => setDenoise(e.target.checked)}
+                className="mt-0.5 size-4 accent-[var(--color-brand)]"
+              />
+              <span>
+                <span className="text-sm font-medium">噪声抑制</span>
+                <span className="mt-0.5 block text-xs text-neutral-400">
+                  户外、街头、嘈杂环境的录音建议开启（AI 降噪后再识别，稍慢几秒）；安静的口播/课程不必开
+                </span>
+              </span>
+            </label>
+          )}
         </fieldset>
 
         {/* 拖放/点击选择区域 */}

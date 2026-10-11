@@ -120,8 +120,8 @@ export async function processProject(projectId: string): Promise<void> {
       project.processMode === "ocr"
         ? await extractSubtitlesFromVideo(videoPath, durationSec)
         : await (async () => {
-            // 抽取音频（16kHz 单声道 mp3）
-            await extractAudioToMp3(videoPath, tmpAudio);
+            // 抽取音频（16kHz 单声道 mp3；denoise 开启时叠加 afftdn 降噪滤镜）
+            await extractAudioToMp3(videoPath, tmpAudio, { denoise: project.denoise });
             // ASR 转写（filetrans provider 需要源文件公网 URL；sync provider 传本地音频即可）
             const provider = getAsrProvider();
             return provider.transcribe({

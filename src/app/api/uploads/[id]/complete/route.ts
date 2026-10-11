@@ -3,6 +3,8 @@
  * @description 校验分片齐全 → 合并/提交（local 合并文件；oss 提交 Multipart）→
  *              魔数/大小复查 → 建项目行 → 异步启动转写流水线。
  *              余额预检与整传 POST /api/projects 保持一致；失败不残留半截对象。
+ *              识别设置（P2.11）随 body 入库：{ processMode, scene, language,
+ *              hotwords, denoise }，非法值白名单清洗回退默认。
  */
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -40,11 +42,14 @@ export async function POST(
     scene?: unknown;
     language?: unknown;
     hotwords?: unknown;
+    denoise?: unknown;
   } | null;
   const requestedMode = normalizeProcessMode(body?.processMode);
   const scene = normalizeScene(body?.scene);
   const language = normalizeAsrLanguage(body?.language);
   const hotwords = parseHotwords(body?.hotwords);
+  // 噪声开关（P2.11）：显式 true 才开启，其余一律 false
+  const denoise = body?.denoise === true;
 
   try {
     const meta = getMeta(id, user.id);
@@ -75,6 +80,7 @@ export async function POST(
         scene,
         language,
         hotwords: hotwords.length > 0 ? hotwords.join(",") : null,
+        denoise,
       },
     });
 
