@@ -3,7 +3,8 @@
  * @file 字幕编辑器（客户端组件）
  * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换/微调），右侧分段列表。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
- *         删除行、上方插入行、选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
+ *         删除行、上方插入行、时间轴批量调整（整体偏移/整体伸缩 + 撤销）、
+ *         选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
  *         描边/高亮）、另存为我的模板、删除我的模板、保存（PUT 全量 segments）、
  *         导出成片（ExportCard：携带当前预览样式快照烧录，所见即所得 + 额度扣减 + 下载）。
  *   依赖 API：GET /api/projects/[id]/video、PUT /api/projects/[id]/transcript、
@@ -83,6 +84,10 @@ export function SubtitleEditor({
   const [saveName, setSaveName] = useState("");
   const [savingTpl, setSavingTpl] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tlOpen, setTlOpen] = useState(false);
+  const [offsetSec, setOffsetSec] = useState("0");
+  const [scaleRatio, setScaleRatio] = useState("1.00");
+  const [tlUndo, setTlUndo] = useState<EditorSegment[] | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [containerH, setContainerH] = useState(0);
 
@@ -179,6 +184,56 @@ export function SubtitleEditor({
   /** 是否有未保存修改 */
   const dirty =
     JSON.stringify(segments) !== JSON.stringify(initialSegments);
+
+  /**
+   * 应用整体偏移：所有行 start/end 平移 delta 秒（正=后移）
+   * 任一行起点 <0 时拒绝（避免负时间被服务端 400）
+   */
+  function applyTimelineOffset() {
+    const delta = Number(offsetSec);
+    if (!Number.isFinite(delta) || delta === 0) return;
+    const next = segments.map((s) => ({ ...s, start: s.start + delta, end: s.end + delta }));
+    if (next.some((s) => s.start < 0)) {
+      setMessage({ type: "err", text: "偏移后有字幕行开始时间小于 0，请减小偏移量" });
+      return;
+    }
+    setTlUndo(segments);
+    setSegments(next);
+    setMessage({
+      type: "ok",
+      text: `已整体${delta > 0 ? "后" : "前"}移 ${Math.abs(delta)} 秒，请核对后点「保存修改」`,
+    });
+  }
+
+  /**
+   * 应用整体伸缩：以首行起点为锚按比例拉伸时间轴（>1 拉长，<1 压缩）。
+   * 锚点取首行起点（≥0）且 ratio>0，数学上保证结果恒合法（start≥0 且 end>start），无需校验
+   */
+  function applyTimelineScale() {
+    const ratio = Number(scaleRatio);
+    if (!Number.isFinite(ratio) || ratio <= 0 || ratio === 1) return;
+    const anchor = segments[0]?.start ?? 0;
+    setTlUndo(segments);
+    setSegments(
+      segments.map((s) => ({
+        ...s,
+        start: anchor + (s.start - anchor) * ratio,
+        end: anchor + (s.end - anchor) * ratio,
+      })),
+    );
+    setMessage({
+      type: "ok",
+      text: `已按 ${ratio} 倍伸缩时间轴，请核对后点「保存修改」`,
+    });
+  }
+
+  /** 撤销最近一次时间轴批量调整（恢复应用前快照，仅保留一步） */
+  function undoTimeline() {
+    if (!tlUndo) return;
+    setSegments(tlUndo);
+    setTlUndo(null);
+    setMessage({ type: "ok", text: "已撤销最近一次时间轴调整" });
+  }
 
   /** 选择样式（官方模板或我的模板），重置为该模板的库内配置 */
   function selectStyle(source: "official" | "user", s: StyleMeta) {
@@ -580,6 +635,73 @@ export function SubtitleEditor({
           >
             {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
           </button>
+        </div>
+
+        {/* 时间轴批量调整（整体与语音不同步时使用；纯前端计算，保存走统一 PUT） */}
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setTlOpen((v) => !v)}
+            className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
+          >
+            {tlOpen ? "收起时间轴工具 ▲" : "时间轴批量调整 ▼"}
+          </button>
+          {tlOpen && (
+            <div className="mt-2 space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
+              <p className="text-xs text-neutral-400">
+                字幕整体与语音不同步时使用；调整只改本地预览，需点「保存修改」后导出才生效
+              </p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                <span className="w-16 shrink-0">整体偏移</span>
+                <input
+                  type="number"
+                  step={0.1}
+                  min={-30}
+                  max={30}
+                  value={offsetSec}
+                  onChange={(e) => setOffsetSec(e.target.value)}
+                  className="w-24 rounded-lg border border-neutral-200 px-2 py-1 outline-none focus:border-brand"
+                />
+                <span className="text-neutral-400">秒（正 = 后移）</span>
+                <button
+                  type="button"
+                  onClick={applyTimelineOffset}
+                  className="rounded-lg border border-neutral-200 px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand"
+                >
+                  应用偏移
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                <span className="w-16 shrink-0">整体伸缩</span>
+                <input
+                  type="number"
+                  step={0.01}
+                  min={0.5}
+                  max={2}
+                  value={scaleRatio}
+                  onChange={(e) => setScaleRatio(e.target.value)}
+                  className="w-24 rounded-lg border border-neutral-200 px-2 py-1 outline-none focus:border-brand"
+                />
+                <span className="text-neutral-400">倍（以首行起点为锚，&gt;1 拉长）</span>
+                <button
+                  type="button"
+                  onClick={applyTimelineScale}
+                  className="rounded-lg border border-neutral-200 px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand"
+                >
+                  应用伸缩
+                </button>
+              </div>
+              {tlUndo && (
+                <button
+                  type="button"
+                  onClick={undoTimeline}
+                  className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
+                >
+                  撤销最近一次调整
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {message && (
