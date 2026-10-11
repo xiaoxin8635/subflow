@@ -43,6 +43,10 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - [x] **P2.1 音频直传**（`docs/ROADMAP.md` 第三期）：mp3 / m4a / wav 纯音频
       播客/课程转字幕（复用转写链路），项目区分 mediaKind；
       音频项目仅字幕文件下载（不提供烧录成片），前后端双重拦截
+- [x] **P2.2 自定义样式保存**（`docs/ROADMAP.md` 第三期）：编辑器样式微调面板
+      （字体/字号/位置/边距/字色/描边/高亮）+「另存为我的模板」（UserStyle 表）；
+      导出携带当前预览样式快照（所见即所得，模板删改不影响已建任务），
+      官方/个人模板统一烧录，ASS 下载支持 `?userStyleId=`
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -140,6 +144,24 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
   不提供烧录成片——前端导出卡隐藏入口 + 导出 API/流水线双重拦截（400）
 - 上传入口：`/dashboard/new` 支持音频与视频混选批量上传；魔数校验扩展
   ID3 / MPEG frame sync / RIFF-WAVE（mp3/wav）等音频签名
+
+### 自定义样式说明（P2.2）
+
+- **样式微调面板**（编辑器「字幕样式」卡内）：字体 / 字号（@1080p 高度百分比）/
+  位置（顶部/居中/底部）/ 垂直边距 / 字色 / 描边色与宽度（0=不描边）/
+  关键词高亮色（可关闭）；调整实时反映在左侧预览
+- **我的模板**：微调效果可「另存为我的模板」（`UserStyle` 表，每人 ≤20 个），
+  样式选择器分组展示官方模板与我的模板，个人模板可删除
+- **导出快照（所见即所得）**：创建导出时把当前预览的样式配置快照写入
+  `ExportTask.styleConfig`，烧录以快照为准——微调未保存为模板也按所见导出，
+  模板后续被删/改不影响已建任务
+- **API**：`GET/POST /api/user-styles`、`DELETE /api/user-styles/[id]`（本人校验，
+  config 服务端强校验：范围 + 颜色格式 + 字体名白名单字符集，阻断 ASS Style 行注入）；
+  导出请求体支持 `{ styleId | userStyleId, styleConfig? }`（样式标识二选一，
+  styleConfig 提供时以它为准；仅传 `styleId` 的旧调用完全兼容）
+- ASS 字幕下载支持 `?userStyleId=`（与 `?styleId=` 对等，仅本人模板可用）
+- 样式契约统一收敛在 [src/lib/style-config.ts](src/lib/style-config.ts)
+  （前端渲染器 / ASS 生成器 / API 校验三方共用）
 
 ### CI 说明（P1.7）
 
@@ -244,6 +266,11 @@ node scripts/e2e-batch-test.mjs
 # P2.1 音频直传专项：MIME 白名单 → 伪音频魔数 415 → 真实 mp3 上传转写
 # → mediaKind=audio → SRT 下载 → 烧录导出被拒 400（运行约 1-2 分钟，真实调用 DashScope）
 node scripts/e2e-audio-test.mjs
+
+# P2.2 自定义样式专项：模板 CRUD/上限/越权/非法配置 → 直连 DB 造 READY 项目（零 ASR 费用）
+# → 我的模板烧录导出 → 快照独立性 → 微调 styleConfig 所见即所得 → ASS 带 userStyleId
+# （注意：STORAGE_DRIVER=oss 时请以 `STORAGE_DRIVER=local npm start` 启动被测服务）
+node scripts/e2e-user-style-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts

@@ -33,6 +33,7 @@ model User {
   creditLedger  CreditLedger[]
   sessions      Session[]
   notifications Notification[]
+  userStyles    UserStyle[]
 }
 
 // ---------------------------------------------------------------------
@@ -159,18 +160,35 @@ model Style {
 }
 
 // ---------------------------------------------------------------------
+// 用户自定义样式模板（P2.2）：config 与全局 Style.config 同契约，
+// 仅归属用户本人可见/可用；上限条数在 API 层控制（≤20 条/用户）
+// ---------------------------------------------------------------------
+model UserStyle {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String // 模板名（用户自定义，1-20 字符）
+  config    Json // 样式配置（契约同 Style.config）
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------
 // 导出任务：FFmpeg 烧录字幕为异步任务
 // ---------------------------------------------------------------------
 model ExportTask {
-  id         String     @id @default(cuid())
-  projectId  String
-  styleId    String?
-  resolution String     @default("720p")
-  status     TaskStatus @default(PENDING)
-  outputKey  String? // 导出产物的存储 key
-  error      String? // 失败原因
-  createdAt  DateTime   @default(now())
-  finishedAt DateTime?
+  id          String     @id @default(cuid())
+  projectId   String
+  styleId     String?
+  styleConfig Json? // 创建任务时的样式快照（烧录以此为准；官方/个人模板后续被删改不影响本任务）
+  resolution  String     @default("720p")
+  status      TaskStatus @default(PENDING)
+  outputKey   String? // 导出产物的存储 key
+  error       String? // 失败原因
+  createdAt   DateTime   @default(now())
+  finishedAt  DateTime?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   style   Style?  @relation(fields: [styleId], references: [id])

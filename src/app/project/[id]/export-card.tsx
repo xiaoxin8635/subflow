@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import type { StyleConfig } from "@/lib/style-config";
 import {
   browserNotify,
   notificationPermission,
@@ -47,8 +48,11 @@ type ExportPhase = "idle" | "submitting" | "processing" | "done" | "failed";
  * @param props.projectId    项目 ID
  * @param props.projectTitle 项目标题（系统通知文案用）
  * @param props.durationSec  媒体时长（秒），用于预计扣费展示
- * @param props.styleId      当前选中样式 ID（导出按此样式烧录）
+ * @param props.styleId      当前选中样式 ID（官方模板或我的模板的 ID，导出按此样式烧录）
  * @param props.styleName    当前选中样式名称（展示用）
+ * @param props.styleSource  样式来源（创建导出时决定请求体用 styleId 还是 userStyleId）
+ * @param props.styleConfig  当前预览的样式配置（含未保存微调，随导出请求快照，所见即所得）
+ * @param props.assQuery     ASS 下载链接附加的样式 query（如 "styleId=xx" / "userStyleId=yy"）
  * @param props.dirty        字幕是否有未保存修改（true 时禁止导出）
  * @param props.mediaKind    媒体类型（audio 时隐藏成片烧录入口，仅保留字幕文件下载）
  */
@@ -58,6 +62,9 @@ export function ExportCard({
   durationSec,
   styleId,
   styleName,
+  styleSource = "official",
+  styleConfig = null,
+  assQuery = "",
   dirty,
   mediaKind = "video",
 }: {
@@ -66,6 +73,9 @@ export function ExportCard({
   durationSec: number;
   styleId: string | null;
   styleName: string | null;
+  styleSource?: "official" | "user";
+  styleConfig?: StyleConfig | null;
+  assQuery?: string;
   dirty: boolean;
   mediaKind?: "video" | "audio";
 }) {
@@ -162,10 +172,14 @@ export function ExportCard({
     setPhase("submitting");
     setError(null);
     try {
+      // 样式标识按来源二选一；始终携带当前预览配置快照（微调未保存也按所见导出）
       const res = await fetch(`/api/projects/${projectId}/exports`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ styleId }),
+        body: JSON.stringify({
+          ...(styleSource === "user" ? { userStyleId: styleId } : { styleId }),
+          ...(styleConfig ? { styleConfig } : {}),
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as { taskId?: string; error?: string };
       if (!res.ok || !body.taskId) {
@@ -257,8 +271,8 @@ export function ExportCard({
             ⬇ VTT
           </a>
           <a
-            href={`/api/projects/${projectId}/ass`}
-            title={dirty ? "建议先保存修改，下载内容为已保存版本" : "带样式与关键词高亮：mpv / PotPlayer 直接挂载"}
+            href={`/api/projects/${projectId}/ass${assQuery ? `?${assQuery}` : ""}`}
+            title={dirty ? "建议先保存修改，下载内容为已保存版本" : "带样式与关键词高亮：mpv / PotPlayer 直接挂载（按所选模板配置，未保存的微调不含在内）"}
             className={`rounded-xl border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:border-neutral-300 ${
               dirty ? "opacity-60" : ""
             }`}

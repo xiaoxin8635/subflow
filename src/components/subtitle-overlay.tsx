@@ -1,33 +1,14 @@
 /**
  * @file 字幕叠加渲染层（纯展示组件）
  * @description 按样式 config 契约把单条字幕渲染为视频容器上的叠加层。
- *              config 结构与 FFmpeg ASS 生成器共同遵守（见 prisma/seed.mjs）：
+ *              契约定义与解析见 src/lib/style-config.ts（与 FFmpeg ASS 生成器共同遵守）：
  *              fontSize 为相对 1080p 高度的百分比，outlineWidth/marginV 为 @1080p 像素，
  *              渲染时按容器实际高度等比缩放。
  */
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-
-/** 样式配置契约（与数据库 Style.config JSON 一致） */
-export interface StyleConfig {
-  /** 字体名（渲染时自动回退系统无衬线） */
-  fontFamily: string;
-  /** 字号：相对 1080p 高度的百分比（5.2 ≈ 56px @1080p） */
-  fontSize: number;
-  /** 主颜色 #RRGGBB */
-  primaryColor: string;
-  /** 描边颜色，空字符串 = 不描边 */
-  outlineColor: string;
-  /** 描边宽度（px @1080p） */
-  outlineWidth: number;
-  /** 垂直位置 */
-  position: "top" | "center" | "bottom";
-  /** 垂直边距（px @1080p） */
-  marginV: number;
-  /** 关键词高亮色，空字符串 = 不高亮 */
-  highlight: string;
-}
+import type { StyleConfig } from "@/lib/style-config";
 
 /** 单条字幕分段（渲染所需最小结构） */
 export interface OverlaySegment {
@@ -127,36 +108,4 @@ export function SubtitleOverlay({
       </div>
     </div>
   );
-}
-
-/**
- * 安全解析 Style.config JSON（数据库读取侧容错）
- * @param raw 未知类型的 config 值
- * @returns 合法返回 StyleConfig，否则 null（调用方回退默认样式）
- */
-export function parseStyleConfig(raw: unknown): StyleConfig | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const c = raw as Record<string, unknown>;
-  if (
-    typeof c.fontFamily !== "string" ||
-    typeof c.fontSize !== "number" ||
-    typeof c.primaryColor !== "string" ||
-    typeof c.outlineColor !== "string" ||
-    typeof c.outlineWidth !== "number" ||
-    (c.position !== "top" && c.position !== "center" && c.position !== "bottom") ||
-    typeof c.marginV !== "number" ||
-    typeof c.highlight !== "string"
-  ) {
-    return null;
-  }
-  return {
-    fontFamily: c.fontFamily,
-    fontSize: c.fontSize,
-    primaryColor: c.primaryColor,
-    outlineColor: c.outlineColor,
-    outlineWidth: c.outlineWidth,
-    position: c.position,
-    marginV: c.marginV,
-    highlight: c.highlight,
-  };
 }

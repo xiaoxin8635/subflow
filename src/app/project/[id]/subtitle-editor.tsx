@@ -1,16 +1,19 @@
 "use client";
 /**
  * @file 字幕编辑器（客户端组件）
- * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换），右侧分段列表。
+ * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换/微调），右侧分段列表。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
- *         删除行、上方插入行、切换样式模板、保存（PUT 全量 segments）、
- *         导出成片（ExportCard：按当前样式 FFmpeg 烧录 + 额度扣减 + 下载）。
+ *         删除行、上方插入行、选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
+ *         描边/高亮）、另存为我的模板、删除我的模板、保存（PUT 全量 segments）、
+ *         导出成片（ExportCard：携带当前预览样式快照烧录，所见即所得 + 额度扣减 + 下载）。
  *   依赖 API：GET /api/projects/[id]/video、PUT /api/projects/[id]/transcript、
- *             GET /api/styles、POST /api/projects/[id]/exports、GET /api/exports/[id]。
+ *             GET /api/styles、GET/POST /api/user-styles、DELETE /api/user-styles/[id]、
+ *             POST /api/projects/[id]/exports、GET /api/exports/[id]。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SubtitleOverlay, parseStyleConfig } from "@/components/subtitle-overlay";
-import type { StyleConfig } from "@/components/subtitle-overlay";
+import { SubtitleOverlay } from "@/components/subtitle-overlay";
+import { parseStyleConfig } from "@/lib/style-config";
+import type { StyleConfig } from "@/lib/style-config";
 import { ExportCard } from "./export-card";
 
 /** 编辑器使用的分段结构（keywords 由后端保证存在） */
@@ -21,13 +24,23 @@ export interface EditorSegment {
   keywords: string[];
 }
 
-/** 样式列表项（GET /api/styles 返回） */
+/** 样式列表项（GET /api/styles 官方模板；GET /api/user-styles 我的模板——无 isDefault） */
 interface StyleMeta {
   id: string;
   name: string;
   config: unknown;
-  isDefault: boolean;
+  isDefault?: boolean;
 }
+
+/** 微调面板的字体候选（烧录由 libass 按字体名匹配，部署机缺失时回退默认字体） */
+const FONT_OPTIONS = [
+  { value: "Noto Sans SC", label: "思源黑体" },
+  { value: "Microsoft YaHei", label: "微软雅黑" },
+  { value: "SimHei", label: "黑体" },
+  { value: "SimSun", label: "宋体" },
+  { value: "KaiTi", label: "楷体" },
+  { value: "FangSong", label: "仿宋" },
+] as const;
 
 /** 秒 → mm:ss.d 展示 */
 function fmt(t: number): string {
@@ -61,8 +74,14 @@ export function SubtitleEditor({
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [styles, setStyles] = useState<StyleMeta[]>([]);
+  const [userStyles, setUserStyles] = useState<StyleMeta[]>([]);
   const [activeStyle, setActiveStyle] = useState<StyleConfig | null>(null);
   const [activeStyleId, setActiveStyleId] = useState<string | null>(null);
+  const [styleSource, setStyleSource] = useState<"official" | "user">("official");
+  const [tweakOpen, setTweakOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [savingTpl, setSavingTpl] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [containerH, setContainerH] = useState(0);
@@ -71,18 +90,27 @@ export function SubtitleEditor({
   const videoBoxRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
 
-  // 加载样式列表并选中默认样式
+  // 加载样式列表（官方模板 + 我的模板）并选中默认样式
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/styles", { cache: "no-store" });
-        if (!res.ok) return;
-        const body = (await res.json()) as { styles: StyleMeta[] };
+        const [styleRes, userRes] = await Promise.all([
+          fetch("/api/styles", { cache: "no-store" }),
+          fetch("/api/user-styles", { cache: "no-store" }),
+        ]);
+        const official: StyleMeta[] = styleRes.ok
+          ? ((await styleRes.json()) as { styles: StyleMeta[] }).styles
+          : [];
+        const mine: StyleMeta[] = userRes.ok
+          ? ((await userRes.json()) as { styles: StyleMeta[] }).styles
+          : [];
         if (cancelled) return;
-        setStyles(body.styles);
-        const def = body.styles.find((s) => s.isDefault) ?? body.styles[0];
+        setStyles(official);
+        setUserStyles(mine);
+        const def = official.find((s) => s.isDefault) ?? official[0];
         if (def) {
+          setStyleSource("official");
           setActiveStyleId(def.id);
           setActiveStyle(parseStyleConfig(def.config));
         }
@@ -152,6 +180,74 @@ export function SubtitleEditor({
   const dirty =
     JSON.stringify(segments) !== JSON.stringify(initialSegments);
 
+  /** 选择样式（官方模板或我的模板），重置为该模板的库内配置 */
+  function selectStyle(source: "official" | "user", s: StyleMeta) {
+    setStyleSource(source);
+    setActiveStyleId(s.id);
+    setActiveStyle(parseStyleConfig(s.config));
+  }
+
+  /** 微调当前样式（仅本地预览；导出时随请求快照，另存为模板时随请求保存） */
+  function adjustStyle(patch: Partial<StyleConfig>) {
+    setActiveStyle((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
+  /** 另存为我的模板（POST /api/user-styles，成功后选中新模板） */
+  async function handleSaveAsTemplate() {
+    if (!activeStyle || savingTpl) return;
+    const name = saveName.trim();
+    if (!name) return;
+    setSavingTpl(true);
+    try {
+      const res = await fetch("/api/user-styles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, config: activeStyle }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        style?: StyleMeta;
+        error?: string;
+      };
+      const created = body.style;
+      if (!res.ok || !created) {
+        throw new Error(body.error ?? `保存失败（HTTP ${res.status}）`);
+      }
+      setUserStyles((prev) => [created, ...prev]);
+      selectStyle("user", created);
+      setSaveOpen(false);
+      setSaveName("");
+      setMessage({ type: "ok", text: `已保存为我的模板「${created.name}」` });
+    } catch (e) {
+      setMessage({ type: "err", text: e instanceof Error ? e.message : "保存模板失败" });
+    } finally {
+      setSavingTpl(false);
+    }
+  }
+
+  /** 删除我的模板（删除当前选中的则回退默认官方样式） */
+  async function handleDeleteUserStyle(id: string) {
+    if (!window.confirm("确定删除这个模板吗？（已创建的导出任务不受影响）")) return;
+    try {
+      const res = await fetch(`/api/user-styles/${id}`, { method: "DELETE" });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error ?? `删除失败（HTTP ${res.status}）`);
+      setUserStyles((prev) => prev.filter((s) => s.id !== id));
+      if (styleSource === "user" && activeStyleId === id) {
+        const def = styles.find((s) => s.isDefault) ?? styles[0];
+        if (def) {
+          selectStyle("official", def);
+        } else {
+          setStyleSource("official");
+          setActiveStyleId(null);
+          setActiveStyle(null);
+        }
+      }
+      setMessage({ type: "ok", text: "模板已删除" });
+    } catch (e) {
+      setMessage({ type: "err", text: e instanceof Error ? e.message : "删除失败" });
+    }
+  }
+
   /** 保存到服务端 */
   async function handleSave() {
     if (saving) return;
@@ -192,19 +288,16 @@ export function SubtitleEditor({
           )}
         </div>
 
-        {/* 样式切换 */}
+        {/* 样式切换 + 微调 + 我的模板 */}
         <div className="mt-4 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
           <p className="text-sm font-medium">字幕样式</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {styles.map((s) => (
               <button
                 key={s.id}
-                onClick={() => {
-                  setActiveStyleId(s.id);
-                  setActiveStyle(parseStyleConfig(s.config));
-                }}
+                onClick={() => selectStyle("official", s)}
                 className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
-                  activeStyleId === s.id
+                  styleSource === "official" && activeStyleId === s.id
                     ? "bg-brand text-white"
                     : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
                 }`}
@@ -213,19 +306,262 @@ export function SubtitleEditor({
               </button>
             ))}
             {styles.length === 0 && (
-              <span className="text-sm text-neutral-400">暂无样式模板</span>
+              <span className="text-sm text-neutral-400">暂无官方样式模板</span>
             )}
           </div>
-          <p className="mt-2 text-xs text-neutral-400">切换后立即在左侧预览，导出时将按所选样式烧录</p>
+
+          {userStyles.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-neutral-500">我的模板</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {userStyles.map((s) => {
+                  const active = styleSource === "user" && activeStyleId === s.id;
+                  return (
+                    <span
+                      key={s.id}
+                      className={`inline-flex items-center overflow-hidden rounded-full text-sm transition-colors ${
+                        active
+                          ? "bg-brand text-white"
+                          : "border border-neutral-200 text-neutral-600"
+                      }`}
+                    >
+                      <button
+                        onClick={() => selectStyle("user", s)}
+                        className={`py-1.5 pl-3.5 pr-1.5 transition-colors ${
+                          active ? "" : "hover:text-brand"
+                        }`}
+                      >
+                        {s.name}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUserStyle(s.id)}
+                        title="删除此模板"
+                        className={`px-2 py-1.5 text-xs transition-colors ${
+                          active
+                            ? "text-white/70 hover:text-white"
+                            : "text-neutral-300 hover:text-red-500"
+                        }`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <p className="mt-2 text-xs text-neutral-400">
+            切换后立即在左侧预览，导出按当前预览效果烧录（微调未保存为模板也生效）
+          </p>
+
+          {/* 样式微调面板（调整只影响本地预览与导出快照，不改模板库内配置） */}
+          {activeStyle && (
+            <div className="mt-3 border-t border-neutral-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setTweakOpen((v) => !v)}
+                className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
+              >
+                {tweakOpen ? "收起样式微调 ▲" : "微调当前样式 ▼"}
+              </button>
+              {tweakOpen && (
+                <div className="mt-3 space-y-3">
+                  {/* 字体 */}
+                  <label className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">字体</span>
+                    <select
+                      value={activeStyle.fontFamily}
+                      onChange={(e) => adjustStyle({ fontFamily: e.target.value })}
+                      className="flex-1 rounded-lg border border-neutral-200 px-2 py-1.5 text-sm outline-none focus:border-brand"
+                    >
+                      {FONT_OPTIONS.map((f) => (
+                        <option key={f.value} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {/* 字号（@1080p 高度百分比） */}
+                  <label className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">字号</span>
+                    <input
+                      type="range"
+                      min={3}
+                      max={12}
+                      step={0.1}
+                      value={activeStyle.fontSize}
+                      onChange={(e) => adjustStyle({ fontSize: Number(e.target.value) })}
+                      className="flex-1 accent-brand"
+                    />
+                    <span className="w-10 text-right font-mono">
+                      {activeStyle.fontSize.toFixed(1)}
+                    </span>
+                  </label>
+                  {/* 垂直位置 */}
+                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">位置</span>
+                    <div className="flex gap-1">
+                      {(
+                        [
+                          ["top", "顶部"],
+                          ["center", "居中"],
+                          ["bottom", "底部"],
+                        ] as const
+                      ).map(([v, label]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => adjustStyle({ position: v })}
+                          className={`rounded-lg px-2.5 py-1 transition-colors ${
+                            activeStyle.position === v
+                              ? "bg-brand text-white"
+                              : "border border-neutral-200 text-neutral-600 hover:border-brand/40"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 垂直边距（@1080p 像素；居中定位不参与，禁用滑块） */}
+                  <label className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">边距</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={400}
+                      step={5}
+                      value={activeStyle.marginV}
+                      disabled={activeStyle.position === "center"}
+                      onChange={(e) => adjustStyle({ marginV: Number(e.target.value) })}
+                      className="flex-1 accent-brand disabled:opacity-40"
+                    />
+                    <span className="w-10 text-right font-mono">{activeStyle.marginV}</span>
+                  </label>
+                  {/* 主颜色 */}
+                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">字色</span>
+                    <input
+                      type="color"
+                      value={activeStyle.primaryColor}
+                      onChange={(e) => adjustStyle({ primaryColor: e.target.value })}
+                      className="h-7 w-12 cursor-pointer rounded border border-neutral-200"
+                    />
+                    <span className="font-mono text-neutral-400">{activeStyle.primaryColor}</span>
+                  </div>
+                  {/* 描边（宽度 0 = 不描边） */}
+                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">描边</span>
+                    <input
+                      type="color"
+                      value={activeStyle.outlineColor || "#000000"}
+                      onChange={(e) => adjustStyle({ outlineColor: e.target.value })}
+                      className="h-7 w-12 cursor-pointer rounded border border-neutral-200"
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={12}
+                      step={0.5}
+                      value={activeStyle.outlineWidth}
+                      onChange={(e) => adjustStyle({ outlineWidth: Number(e.target.value) })}
+                      className="flex-1 accent-brand"
+                    />
+                    <span className="w-14 text-right font-mono">
+                      {activeStyle.outlineWidth > 0 ? `${activeStyle.outlineWidth}px` : "无"}
+                    </span>
+                  </div>
+                  {/* 关键词高亮色（空 = 不高亮） */}
+                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                    <span className="w-14 shrink-0">高亮</span>
+                    <input
+                      type="color"
+                      value={activeStyle.highlight || "#FFE135"}
+                      onChange={(e) => adjustStyle({ highlight: e.target.value })}
+                      disabled={!activeStyle.highlight}
+                      className="h-7 w-12 cursor-pointer rounded border border-neutral-200 disabled:opacity-40"
+                    />
+                    <span className="font-mono text-neutral-400">
+                      {activeStyle.highlight || "不高亮"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => adjustStyle({ highlight: activeStyle.highlight ? "" : "#FFE135" })}
+                      className="ml-auto shrink-0 rounded-lg border border-neutral-200 px-2 py-1 transition-colors hover:border-brand/40"
+                    >
+                      {activeStyle.highlight ? "关闭高亮" : "开启高亮"}
+                    </button>
+                  </div>
+
+                  {/* 另存为我的模板 */}
+                  <div className="border-t border-neutral-100 pt-3">
+                    {saveOpen ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={saveName}
+                          autoFocus
+                          maxLength={20}
+                          placeholder="模板名（如：我的黄字大号）"
+                          onChange={(e) => setSaveName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void handleSaveAsTemplate();
+                          }}
+                          className="flex-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm outline-none focus:border-brand"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveAsTemplate()}
+                          disabled={savingTpl || !saveName.trim()}
+                          className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {savingTpl ? "保存中…" : "保存"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSaveOpen(false);
+                            setSaveName("");
+                          }}
+                          className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:border-neutral-300"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSaveOpen(true)}
+                        className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
+                      >
+                        把当前效果另存为我的模板
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* 导出卡片（按当前样式烧录，完成后可下载；音频项目仅字幕下载） */}
+        {/* 导出卡片（按当前预览样式快照烧录，完成后可下载；音频项目仅字幕下载） */}
         <ExportCard
           projectId={projectId}
           projectTitle={projectTitle}
           durationSec={durationSec}
           styleId={activeStyleId}
-          styleName={styles.find((s) => s.id === activeStyleId)?.name ?? null}
+          styleName={
+            [...styles, ...userStyles].find((s) => s.id === activeStyleId)?.name ?? null
+          }
+          styleSource={styleSource}
+          styleConfig={activeStyle}
+          assQuery={
+            activeStyleId
+              ? styleSource === "user"
+                ? `userStyleId=${activeStyleId}`
+                : `styleId=${activeStyleId}`
+              : ""
+          }
           dirty={dirty}
           mediaKind={mediaKind}
         />

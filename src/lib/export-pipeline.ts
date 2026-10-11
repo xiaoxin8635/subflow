@@ -23,6 +23,7 @@ import { logger } from "@/lib/logger";
 import { sendAlert } from "@/lib/alert";
 import { notify } from "@/lib/notify";
 import { buildAss, DEFAULT_ASS_CONFIG } from "@/lib/ass";
+import { parseStyleConfig } from "@/lib/style-config";
 import { enqueueExport } from "@/lib/queue/queues";
 import { ensureLocalVideo, isOss, removeLocalVideoCache } from "@/lib/storage";
 import { ossUploadFile } from "@/lib/oss";
@@ -123,11 +124,12 @@ export async function processExport(taskId: string): Promise<void> {
     // ①' 源视频本地路径（oss 模式先拉取到本地缓存，失败即抛错交由重试）
     const inputAbsPath = await ensureLocalVideo(project.videoKey!);
 
-    // ② 生成 ASS 文件（样式缺失时用共享默认配置兜底，保证仍可导出）
-    const assContent = buildAss(
-      (style?.config as unknown as Parameters<typeof buildAss>[0]) ?? DEFAULT_ASS_CONFIG,
-      segments,
-    );
+    // ② 生成 ASS 文件：样式快照（任务创建时写入）优先 → 所选模板配置 → 共享默认配置兜底
+    const styleForBurn =
+      parseStyleConfig(task.styleConfig) ??
+      parseStyleConfig(style?.config) ??
+      DEFAULT_ASS_CONFIG;
+    const assContent = buildAss(styleForBurn, segments);
     await fs.writeFile(assAbsPath, assContent, "utf8");
 
     // ③ FFmpeg 烧录：滤镜内用相对路径（规避 Windows 盘符冒号转义）；音频直拷不重编码
