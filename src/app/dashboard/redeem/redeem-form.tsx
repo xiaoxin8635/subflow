@@ -72,16 +72,16 @@ export function RedeemForm({ balanceSeconds }: { balanceSeconds: number }) {
   }
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-8">
       <h1 className="text-xl font-bold tracking-tight">兑换激活码</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-neutral-400">
         输入购买或活动获得的激活码，额度将立即到账 · 当前余额{" "}
-        <span className="font-medium text-brand">{formatSeconds(balance)}</span>
+        <span className="font-medium text-brand-strong">{formatSeconds(balance)}</span>
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
-          <label htmlFor="redeem-code" className="block text-sm font-medium text-neutral-700">
+          <label htmlFor="redeem-code" className="block text-sm font-medium text-neutral-300">
             激活码
           </label>
           <input
@@ -92,15 +92,15 @@ export function RedeemForm({ balanceSeconds }: { balanceSeconds: number }) {
             placeholder="例如：SUBF-XXXX-XXXX-XXXX"
             autoComplete="off"
             spellCheck={false}
-            className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 font-mono tracking-wider outline-none transition focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/20"
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 font-mono tracking-wider outline-none transition placeholder:text-neutral-600 focus:border-brand focus:bg-white/[0.07] focus:ring-2 focus:ring-brand/30"
           />
         </div>
 
         {error && (
-          <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
+          <p className="rounded-xl bg-red-500/10 px-4 py-2.5 text-sm text-red-400">{error}</p>
         )}
         {success && (
-          <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
             <p className="font-medium">
               兑换成功！{success.planName ? `「${success.planName}」套餐已开通，` : ""}
               到账 {formatSeconds(success.addedSeconds)}

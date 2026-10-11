@@ -2,7 +2,8 @@
  * @file 项目封面缩略图（工作台列表用，服务端组件）
  * @description 视觉母题是「监视器里的一帧」：有封面时请求本人专属封面接口；
  *              无封面（音频项目/未转写/抽帧失败）时渲染占位图——视频为播放三角、
- *              音频为声波竖线。转写中的封面叠加自上而下的扫描线动画
+ *              音频为声波竖线（批次②暗色主题：占位底为白玻璃渐变，音频带品牌紫调）。
+ *              转写中的封面叠加自上而下的扫描线动画
  *              （globals.css cover-scanline，reduced-motion 下静止），
  *              右下角叠播放器风格的时长角标。
  */
@@ -55,7 +56,7 @@ export function ProjectCover({ projectId, coverKey, mediaKind, durationSec, stat
   const transcribing = status === "TRANSCRIBING" || status === "UPLOADED";
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-neutral-200 transition-[filter] group-hover:brightness-105">
+    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-white/5 transition-[filter] group-hover:brightness-110">
       {coverKey ? (
         // 本人专属鉴权接口（local 流式 / oss 签名 URL 302）
         // eslint-disable-next-line @next/next/no-img-element
@@ -68,7 +69,7 @@ export function ProjectCover({ projectId, coverKey, mediaKind, durationSec, stat
       ) : (
         <div
           className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${
-            isAudio ? "from-neutral-200 to-neutral-300" : "from-neutral-100 to-neutral-300"
+            isAudio ? "from-brand-soft to-white/[0.04]" : "from-white/[0.08] to-white/[0.03]"
           }`}
         >
           {isAudio ? <WaveGlyph /> : <PlayGlyph />}

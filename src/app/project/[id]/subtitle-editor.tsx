@@ -563,7 +563,7 @@ export function SubtitleEditor({
         <button
           type="button"
           onClick={() => setDrawer("translate")}
-          className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-brand hover:text-brand"
+          className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
         >
           字幕翻译
         </button>
@@ -608,7 +608,7 @@ export function SubtitleEditor({
                     className={`rounded-full px-3 py-1 text-xs transition-colors ${
                       previewLang === t.targetLang
                         ? "bg-brand text-white"
-                        : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
+                        : "border border-white/10 bg-white/[0.04] text-neutral-300 hover:border-brand/40 hover:text-brand-strong"
                     }`}
                   >
                     {label}
@@ -616,7 +616,7 @@ export function SubtitleEditor({
                 );
               })}
             {translations.length === 1 && (
-              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500">
+              <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-neutral-400">
                 {TRANSLATE_LANGUAGES.find((l) => l.code === translations[0].targetLang)?.label ??
                   translations[0].targetLang}
               </span>
@@ -634,7 +634,7 @@ export function SubtitleEditor({
                 className={`rounded-full px-3 py-1 text-xs transition-colors ${
                   previewMode === mode
                     ? "bg-brand text-white"
-                    : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
+                    : "border border-white/10 bg-white/[0.04] text-neutral-300 hover:border-brand/40 hover:text-brand-strong"
                 }`}
               >
                 {label}
@@ -645,7 +645,7 @@ export function SubtitleEditor({
 
         {/* 字幕样式（批次①折叠条）：收起只显示当前模板一行，展开为完整样式面板 */}
         <div
-          className={`mt-4 rounded-2xl border border-black/5 bg-white px-4 shadow-sm ${
+          className={`mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 ${
             styleOpen ? "pb-4" : ""
           }`}
         >
@@ -675,7 +675,7 @@ export function SubtitleEditor({
                 className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
                   styleSource === "official" && activeStyleId === s.id
                     ? "bg-brand text-white"
-                    : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
+                    : "border border-white/10 bg-white/[0.04] text-neutral-300 hover:border-brand/40 hover:text-brand-strong"
                 }`}
               >
                 {s.name}
@@ -689,7 +689,7 @@ export function SubtitleEditor({
 
           {styleOpen && userStyles.length > 0 && (
             <div className="mt-3">
-              <p className="text-xs font-medium text-neutral-500">我的模板</p>
+              <p className="text-xs font-medium text-neutral-400">我的模板</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {userStyles.map((s) => {
                   const active = styleSource === "user" && activeStyleId === s.id;
@@ -699,13 +699,13 @@ export function SubtitleEditor({
                       className={`inline-flex items-center overflow-hidden rounded-full text-sm transition-colors ${
                         active
                           ? "bg-brand text-white"
-                          : "border border-neutral-200 text-neutral-600"
+                          : "border border-white/10 bg-white/[0.04] text-neutral-300"
                       }`}
                     >
                       <button
                         onClick={() => selectStyle("user", s)}
                         className={`py-1.5 pl-3.5 pr-1.5 transition-colors ${
-                          active ? "" : "hover:text-brand"
+                          active ? "" : "hover:text-brand-strong"
                         }`}
                       >
                         {s.name}
@@ -736,23 +736,23 @@ export function SubtitleEditor({
 
           {/* 样式微调面板（调整只影响本地预览与导出快照，不改模板库内配置） */}
           {styleOpen && activeStyle && (
-            <div className="mt-3 border-t border-neutral-100 pt-3">
+            <div className="mt-3 border-t border-white/10 pt-3">
               <button
                 type="button"
                 onClick={() => setTweakOpen((v) => !v)}
-                className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
+                className="text-xs font-medium text-brand-strong transition-opacity hover:opacity-80"
               >
                 {tweakOpen ? "收起样式微调 ▲" : "微调当前样式 ▼"}
               </button>
               {tweakOpen && (
                 <div className="mt-3 space-y-3">
                   {/* 字体 */}
-                  <label className="flex items-center gap-3 text-xs text-neutral-500">
+                  <label className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">字体</span>
                     <select
                       value={activeStyle.fontFamily}
                       onChange={(e) => adjustStyle({ fontFamily: e.target.value })}
-                      className="flex-1 rounded-lg border border-neutral-200 px-2 py-1.5 text-sm outline-none focus:border-brand"
+                      className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-sm outline-none focus:border-brand"
                     >
                       {FONT_OPTIONS.map((f) => (
                         <option key={f.value} value={f.value}>
@@ -762,7 +762,7 @@ export function SubtitleEditor({
                     </select>
                   </label>
                   {/* 字号（@1080p 高度百分比） */}
-                  <label className="flex items-center gap-3 text-xs text-neutral-500">
+                  <label className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">字号</span>
                     <input
                       type="range"
@@ -778,7 +778,7 @@ export function SubtitleEditor({
                     </span>
                   </label>
                   {/* 垂直位置 */}
-                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                  <div className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">位置</span>
                     <div className="flex gap-1">
                       {(
@@ -795,7 +795,7 @@ export function SubtitleEditor({
                           className={`rounded-lg px-2.5 py-1 transition-colors ${
                             activeStyle.position === v
                               ? "bg-brand text-white"
-                              : "border border-neutral-200 text-neutral-600 hover:border-brand/40"
+                              : "border border-white/10 bg-white/[0.04] text-neutral-300 hover:border-brand/40"
                           }`}
                         >
                           {label}
@@ -804,7 +804,7 @@ export function SubtitleEditor({
                     </div>
                   </div>
                   {/* 垂直边距（@1080p 像素；居中定位不参与，禁用滑块） */}
-                  <label className="flex items-center gap-3 text-xs text-neutral-500">
+                  <label className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">边距</span>
                     <input
                       type="range"
@@ -819,24 +819,24 @@ export function SubtitleEditor({
                     <span className="w-10 text-right font-mono">{activeStyle.marginV}</span>
                   </label>
                   {/* 主颜色 */}
-                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                  <div className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">字色</span>
                     <input
                       type="color"
                       value={activeStyle.primaryColor}
                       onChange={(e) => adjustStyle({ primaryColor: e.target.value })}
-                      className="h-7 w-12 cursor-pointer rounded border border-neutral-200"
+                      className="h-7 w-12 cursor-pointer rounded border border-white/10 bg-white/[0.04]"
                     />
                     <span className="font-mono text-neutral-400">{activeStyle.primaryColor}</span>
                   </div>
                   {/* 描边（宽度 0 = 不描边） */}
-                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                  <div className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">描边</span>
                     <input
                       type="color"
                       value={activeStyle.outlineColor || "#000000"}
                       onChange={(e) => adjustStyle({ outlineColor: e.target.value })}
-                      className="h-7 w-12 cursor-pointer rounded border border-neutral-200"
+                      className="h-7 w-12 cursor-pointer rounded border border-white/10 bg-white/[0.04]"
                     />
                     <input
                       type="range"
@@ -852,14 +852,14 @@ export function SubtitleEditor({
                     </span>
                   </div>
                   {/* 关键词高亮色（空 = 不高亮） */}
-                  <div className="flex items-center gap-3 text-xs text-neutral-500">
+                  <div className="flex items-center gap-3 text-xs text-neutral-400">
                     <span className="w-14 shrink-0">高亮</span>
                     <input
                       type="color"
                       value={activeStyle.highlight || "#FFE135"}
                       onChange={(e) => adjustStyle({ highlight: e.target.value })}
                       disabled={!activeStyle.highlight}
-                      className="h-7 w-12 cursor-pointer rounded border border-neutral-200 disabled:opacity-40"
+                      className="h-7 w-12 cursor-pointer rounded border border-white/10 bg-white/[0.04] disabled:opacity-40"
                     />
                     <span className="font-mono text-neutral-400">
                       {activeStyle.highlight || "不高亮"}
@@ -867,14 +867,14 @@ export function SubtitleEditor({
                     <button
                       type="button"
                       onClick={() => adjustStyle({ highlight: activeStyle.highlight ? "" : "#FFE135" })}
-                      className="ml-auto shrink-0 rounded-lg border border-neutral-200 px-2 py-1 transition-colors hover:border-brand/40"
+                      className="ml-auto shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 transition-colors hover:border-brand/40"
                     >
                       {activeStyle.highlight ? "关闭高亮" : "开启高亮"}
                     </button>
                   </div>
 
                   {/* 另存为我的模板 */}
-                  <div className="border-t border-neutral-100 pt-3">
+                  <div className="border-t border-white/10 pt-3">
                     {saveOpen ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -886,7 +886,7 @@ export function SubtitleEditor({
                           onKeyDown={(e) => {
                             if (e.key === "Enter") void handleSaveAsTemplate();
                           }}
-                          className="flex-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm outline-none focus:border-brand"
+                          className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm outline-none focus:border-brand"
                         />
                         <button
                           type="button"
@@ -902,7 +902,7 @@ export function SubtitleEditor({
                             setSaveOpen(false);
                             setSaveName("");
                           }}
-                          className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:border-neutral-300"
+                          className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-300 transition-colors hover:border-white/25"
                         >
                           取消
                         </button>
@@ -911,7 +911,7 @@ export function SubtitleEditor({
                       <button
                         type="button"
                         onClick={() => setSaveOpen(true)}
-                        className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
+                        className="text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand-strong"
                       >
                         把当前效果另存为我的模板
                       </button>
@@ -928,7 +928,7 @@ export function SubtitleEditor({
       <div className="mt-6 flex flex-col lg:mt-0">
         {/* 工具条：时间轴/查找为面板开关（开启高亮）；文稿/打包/保存为动作。flex-nowrap 窄屏横向滚动不折行 */}
         <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-          <span className="mr-auto shrink-0 whitespace-nowrap pr-2 text-sm text-neutral-500">
+          <span className="mr-auto shrink-0 whitespace-nowrap pr-2 text-sm text-neutral-400">
             共 {segments.length} 段
           </span>
           <button
@@ -938,7 +938,7 @@ export function SubtitleEditor({
             className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
               tlOpen
                 ? "border-brand bg-brand-soft text-brand"
-                : "border-black/10 text-neutral-600 hover:border-brand hover:text-brand"
+                : "border-white/10 text-neutral-300 hover:border-brand hover:text-brand-strong"
             }`}
           >
             时间轴
@@ -950,7 +950,7 @@ export function SubtitleEditor({
             className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
               findOpen
                 ? "border-brand bg-brand-soft text-brand"
-                : "border-black/10 text-neutral-600 hover:border-brand hover:text-brand"
+                : "border-white/10 text-neutral-300 hover:border-brand hover:text-brand-strong"
             }`}
           >
             查找替换
@@ -959,7 +959,7 @@ export function SubtitleEditor({
             type="button"
             onClick={() => downloadScript(false)}
             title="逐句一行的纯文本文稿，可直接用于公众号 / 笔记"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
           >
             文稿TXT
           </button>
@@ -967,7 +967,7 @@ export function SubtitleEditor({
             type="button"
             onClick={() => downloadScript(true)}
             title="带时间戳的 Markdown 文稿（**mm:ss** 句文本）"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
           >
             文稿MD
           </button>
@@ -976,7 +976,7 @@ export function SubtitleEditor({
             onClick={() => void downloadBundle()}
             disabled={bundleBusy}
             title="打包下载全部字幕产物（原文三格式 + 文稿 + 已完成翻译与双语）"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
           >
             {bundleBusy ? "打包中…" : "打包"}
           </button>
@@ -1009,11 +1009,11 @@ export function SubtitleEditor({
         {/* 时间轴批量调整面板（开关在工具条「时间轴」；整体与语音不同步时使用；纯前端计算，保存走统一 PUT） */}
         <div className="mt-2 shrink-0">
           {tlOpen && (
-            <div className="space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
+            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs text-neutral-400">
                 字幕整体与语音不同步时使用；调整只改本地预览，需点「保存修改」后导出才生效
               </p>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                 <span className="w-16 shrink-0">整体偏移</span>
                 <input
                   type="number"
@@ -1022,18 +1022,18 @@ export function SubtitleEditor({
                   max={30}
                   value={offsetSec}
                   onChange={(e) => setOffsetSec(e.target.value)}
-                  className="w-24 rounded-lg border border-neutral-200 px-2 py-1 outline-none focus:border-brand"
+                  className="w-24 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 outline-none focus:border-brand"
                 />
                 <span className="text-neutral-400">秒（正 = 后移）</span>
                 <button
                   type="button"
                   onClick={applyTimelineOffset}
-                  className="rounded-lg border border-neutral-200 px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand"
+                  className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand-strong"
                 >
                   应用偏移
                 </button>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                 <span className="w-16 shrink-0">整体伸缩</span>
                 <input
                   type="number"
@@ -1042,13 +1042,13 @@ export function SubtitleEditor({
                   max={2}
                   value={scaleRatio}
                   onChange={(e) => setScaleRatio(e.target.value)}
-                  className="w-24 rounded-lg border border-neutral-200 px-2 py-1 outline-none focus:border-brand"
+                  className="w-24 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 outline-none focus:border-brand"
                 />
                 <span className="text-neutral-400">倍（以首行起点为锚，&gt;1 拉长）</span>
                 <button
                   type="button"
                   onClick={applyTimelineScale}
-                  className="rounded-lg border border-neutral-200 px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand"
+                  className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand-strong"
                 >
                   应用伸缩
                 </button>
@@ -1057,7 +1057,7 @@ export function SubtitleEditor({
                 <button
                   type="button"
                   onClick={undoTimeline}
-                  className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
+                  className="text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand-strong"
                 >
                   撤销最近一次调整
                 </button>
@@ -1069,29 +1069,29 @@ export function SubtitleEditor({
         {/* 查找替换面板（开关在工具条「查找替换」；批量修正错别字 / 统一术语写法；纯前端替换，保存走统一 PUT） */}
         <div className="mt-2 shrink-0">
           {findOpen && (
-            <div className="space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
+            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs text-neutral-400">
                 批量修正错别字或统一术语写法；替换只改本地预览，需点「保存修改」后才对导出生效
               </p>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                 <input
                   value={findText}
                   onChange={(e) => setFindText(e.target.value)}
                   placeholder="查找"
-                  className="w-40 rounded-lg border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-brand"
+                  className="w-40 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-sm outline-none focus:border-brand"
                 />
                 <span className="text-neutral-400">→</span>
                 <input
                   value={replaceText}
                   onChange={(e) => setReplaceText(e.target.value)}
                   placeholder="替换为（留空即删除）"
-                  className="w-40 rounded-lg border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-brand"
+                  className="w-40 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-sm outline-none focus:border-brand"
                 />
                 <button
                   type="button"
                   disabled={!findText || findMatchCount === 0}
                   onClick={replaceAllMatches}
-                  className="rounded-lg border border-neutral-200 px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
+                  className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 transition-colors hover:border-brand/40 hover:text-brand-strong disabled:opacity-50"
                 >
                   {findText ? `全部替换（${findMatchCount} 段命中）` : "全部替换"}
                 </button>
@@ -1100,7 +1100,7 @@ export function SubtitleEditor({
                 <button
                   type="button"
                   onClick={undoTimeline}
-                  className="text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand"
+                  className="text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand-strong"
                 >
                   撤销最近一次批量调整
                 </button>
@@ -1113,10 +1113,10 @@ export function SubtitleEditor({
           <p
             className={`mt-2 text-sm ${
               message.type === "err"
-                ? "text-red-600"
+                ? "text-red-400"
                 : message.type === "warn"
-                  ? "text-amber-600"
-                  : "text-green-600"
+                  ? "text-amber-400"
+                  : "text-green-400"
             }`}
           >
             {message.text}
@@ -1135,8 +1135,8 @@ export function SubtitleEditor({
                 key={idx}
                 className={`rounded-xl border px-4 py-3 transition-colors ${
                   isActive
-                    ? "border-brand/40 bg-brand-soft/60"
-                    : "border-black/5 bg-white hover:bg-neutral-50"
+                    ? "border-brand/50 bg-brand-soft"
+                    : "border-white/[0.06] bg-white/[0.04] hover:bg-white/[0.06]"
                 }`}
               >
                 {isEditing ? (
@@ -1147,9 +1147,9 @@ export function SubtitleEditor({
                       autoFocus
                       rows={2}
                       onChange={(e) => updateSegment(idx, { text: e.target.value })}
-                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none focus:border-brand"
                     />
-                    <div className="flex items-center gap-2 text-xs text-neutral-500">
+                    <div className="flex items-center gap-2 text-xs text-neutral-400">
                       <label>
                         开始
                         <input
@@ -1160,7 +1160,7 @@ export function SubtitleEditor({
                           onChange={(e) =>
                             updateSegment(idx, { start: Number(e.target.value) })
                           }
-                          className="ml-1 w-20 rounded-md border border-neutral-200 px-2 py-1 outline-none focus:border-brand"
+                          className="ml-1 w-20 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 outline-none focus:border-brand"
                         />
                       </label>
                       <label>
@@ -1171,7 +1171,7 @@ export function SubtitleEditor({
                           min={0}
                           value={seg.end}
                           onChange={(e) => updateSegment(idx, { end: Number(e.target.value) })}
-                          className="ml-1 w-20 rounded-md border border-neutral-200 px-2 py-1 outline-none focus:border-brand"
+                          className="ml-1 w-20 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 outline-none focus:border-brand"
                         />
                       </label>
                       <span className="flex-1" />
@@ -1189,11 +1189,11 @@ export function SubtitleEditor({
                     <div className="flex items-start gap-3">
                       <button
                         onClick={() => seekTo(seg.start)}
-                        className="shrink-0 pt-0.5 font-mono text-xs tabular-nums text-neutral-400 transition-colors hover:text-brand"
+                        className="shrink-0 pt-0.5 font-mono text-xs tabular-nums text-neutral-400 transition-colors hover:text-brand-strong"
                         title="跳转到此句"
                       >
                         {fmt(seg.start)}
-                        <span className="text-neutral-300">–{fmt(seg.end)}</span>
+                        <span className="text-neutral-500">–{fmt(seg.end)}</span>
                       </button>
                       <p
                         className="flex-1 cursor-text text-sm leading-6"
@@ -1205,7 +1205,7 @@ export function SubtitleEditor({
                       <div className="flex shrink-0 gap-1">
                         <button
                           onClick={() => insertBefore(idx)}
-                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-brand"
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-white/10 hover:text-brand-strong"
                           title="在上方插入一行"
                         >
                           ＋
@@ -1213,7 +1213,7 @@ export function SubtitleEditor({
                         <button
                           onClick={() => removeSegment(idx)}
                           disabled={segments.length <= 1}
-                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
                           title="删除此行"
                         >
                           ✕
@@ -1222,11 +1222,11 @@ export function SubtitleEditor({
                     </div>
                     {/* 轨道位置条：该句在整片时间轴上的位置（当前播放句高亮为实色） */}
                     {durationSec > 0 && (
-                      <div className="relative h-1 overflow-hidden rounded-full bg-neutral-100">
+                      <div className="relative h-1 overflow-hidden rounded-full bg-white/10">
                         <span
                           aria-hidden
                           className={`absolute inset-y-0 rounded-full transition-colors ${
-                            isActive ? "bg-brand" : "bg-brand/25"
+                            isActive ? "bg-brand-strong" : "bg-brand/40"
                           }`}
                           style={{
                             left: `${Math.min(100, (seg.start / durationSec) * 100)}%`,

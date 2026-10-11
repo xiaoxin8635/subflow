@@ -343,20 +343,20 @@ export function NewUploadClient() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-        <div className="flex items-center gap-2 text-sm text-neutral-500">
-          <Link href="/dashboard" className="transition-colors hover:text-brand">
+        <div className="flex items-center gap-2 text-sm text-neutral-400">
+          <Link href="/dashboard" className="transition-colors hover:text-brand-strong">
             ← 返回项目列表
           </Link>
         </div>
 
         <h1 className="mt-4 text-2xl font-bold tracking-tight">新建项目</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-neutral-400">
           支持一次选择多个视频/音频批量上传（mp4 / mov / mkv / webm / mp3 / m4a / wav，单个最大 500MB；分片上传，中断可续传）
         </p>
 
         {/* 拖放/点击选择区域（批次①动线：先选文件，处理方式与识别设置放在下方） */}
         <label
-          className="mt-6 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-white px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-brand-soft/40"
+          className="mt-6 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.03] px-6 py-8 text-center transition-colors hover:border-brand/60 hover:bg-brand-soft/60"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -389,7 +389,7 @@ export function NewUploadClient() {
               const bad = !ACCEPT_TYPES[extOf(r.file)];
               const tooBig = oversize(r);
               return (
-                <li key={r.id} className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+                <li key={r.id} className="rounded-xl border border-white/[0.06] bg-white/[0.04] px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{r.file.name}</p>
@@ -416,7 +416,7 @@ export function NewUploadClient() {
                     )}
                   </div>
                   {r.status === "uploading" && (
-                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                       <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${r.progress}%` }} />
                     </div>
                   )}
@@ -433,8 +433,8 @@ export function NewUploadClient() {
             <label
               className={`cursor-pointer rounded-xl border-2 px-4 py-3 transition-colors ${
                 processMode === "asr"
-                  ? "border-brand bg-brand-soft/40"
-                  : "border-neutral-200 bg-white hover:border-neutral-300"
+                  ? "border-brand bg-brand-soft/70"
+                  : "border-white/10 bg-white/[0.03] hover:border-white/25"
               }`}
             >
               <input
@@ -446,15 +446,15 @@ export function NewUploadClient() {
                 onChange={() => setProcessMode("asr")}
               />
               <span className="block text-sm font-medium">语音转写</span>
-              <span className="mt-0.5 block text-xs text-neutral-500">
+              <span className="mt-0.5 block text-xs text-neutral-400">
                 识别视频/音频中的人声，逐句生成字幕（默认）
               </span>
             </label>
             <label
               className={`cursor-pointer rounded-xl border-2 px-4 py-3 transition-colors ${
                 processMode === "ocr"
-                  ? "border-brand bg-brand-soft/40"
-                  : "border-neutral-200 bg-white hover:border-neutral-300"
+                  ? "border-brand bg-brand-soft/70"
+                  : "border-white/10 bg-white/[0.03] hover:border-white/25"
               }`}
             >
               <input
@@ -466,9 +466,9 @@ export function NewUploadClient() {
                 onChange={() => setProcessMode("ocr")}
               />
               <span className="block text-sm font-medium">
-                提取画面字幕<span className="ml-1 rounded bg-neutral-900 px-1 py-0.5 text-[10px] font-medium text-white">OCR</span>
+                提取画面字幕<span className="ml-1 rounded bg-brand/20 px-1 py-0.5 text-[10px] font-medium text-brand-strong">OCR</span>
               </span>
-              <span className="mt-0.5 block text-xs text-neutral-500">
+              <span className="mt-0.5 block text-xs text-neutral-400">
                 视频画面已有字幕时直接提取文字；混选的音频仍按语音转写
               </span>
             </label>
@@ -487,8 +487,8 @@ export function NewUploadClient() {
                     key={s.code}
                     className={`cursor-pointer rounded-xl border-2 px-3 py-2.5 transition-colors ${
                       scene === s.code
-                        ? "border-brand bg-brand-soft/40"
-                        : "border-neutral-200 bg-white hover:border-neutral-300"
+                        ? "border-brand bg-brand-soft/70"
+                        : "border-white/10 bg-white/[0.03] hover:border-white/25"
                     }`}
                   >
                     <input
@@ -500,7 +500,7 @@ export function NewUploadClient() {
                       onChange={() => setScene(s.code)}
                     />
                     <span className="block text-sm font-medium">{s.label}</span>
-                    <span className="mt-0.5 block text-xs text-neutral-500">{s.hint}</span>
+                    <span className="mt-0.5 block text-xs text-neutral-400">{s.hint}</span>
                   </label>
                 ))}
               </div>
@@ -510,7 +510,7 @@ export function NewUploadClient() {
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:w-64"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 sm:w-64"
                 >
                   {ASR_LANGUAGES.map((l) => (
                     <option key={l.code} value={l.code}>
@@ -533,7 +533,7 @@ export function NewUploadClient() {
               onChange={(e) => setHotwords(e.target.value)}
               maxLength={600}
               placeholder={processMode === "asr" ? "如：API, agent, RPA, token, 昆明, 螺蛳粉" : "如：API, agent, RPA, token"}
-              className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm transition-colors placeholder:text-neutral-300 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm transition-colors placeholder:text-neutral-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
             <span className="mt-1 block text-xs text-neutral-400">
               {processMode === "asr"
@@ -561,7 +561,7 @@ export function NewUploadClient() {
         </fieldset>
 
         {/* 批量结果汇总 */}
-        {summary && <p className="mt-4 text-center text-sm text-amber-600">{summary}</p>}
+        {summary && <p className="mt-4 text-center text-sm text-amber-400">{summary}</p>}
 
         {/* 提交按钮 */}
         <button
@@ -580,7 +580,7 @@ export function NewUploadClient() {
         {uploading && (
           <button
             onClick={handleCancel}
-            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white py-2.5 text-sm text-neutral-600 transition-colors hover:border-neutral-300"
+            className="mt-3 w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-sm text-neutral-300 transition-colors hover:border-white/25"
           >
             取消上传（已传分片保留，可续传）
           </button>

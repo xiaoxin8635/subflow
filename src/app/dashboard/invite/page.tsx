@@ -53,29 +53,29 @@ export default async function InvitePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">邀请好友</h1>
-            <p className="mt-1 text-sm text-neutral-500">
+            <p className="mt-1 text-sm text-neutral-400">
               把邀请码分享给朋友，注册时填写即可双方得额度
             </p>
           </div>
           <Link
             href="/dashboard"
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
           >
             返回工作台
           </Link>
         </div>
 
         {/* 我的邀请码 */}
-        <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-          <p className="text-sm text-neutral-500">我的邀请码</p>
-          <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-brand">
+        <div className="mt-6 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-6">
+          <p className="text-sm text-neutral-400">我的邀请码</p>
+          <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-brand-strong">
             {inviteCode}
           </p>
-          <p className="mt-3 text-sm text-neutral-500">
+          <p className="mt-3 text-sm text-neutral-400">
             新朋友注册时填写你的邀请码，你得{" "}
-            <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITER_SECONDS)}</span>
+            <span className="font-medium text-brand-strong">{formatBonus(INVITE_REWARD_INVITER_SECONDS)}</span>
             ，TA 额外得{" "}
-            <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITEE_SECONDS)}</span>
+            <span className="font-medium text-brand-strong">{formatBonus(INVITE_REWARD_INVITEE_SECONDS)}</span>
             （叠加在 30 分钟注册赠送之上）。
           </p>
           <div className="mt-4">
@@ -85,32 +85,32 @@ export default async function InvitePage() {
 
         {/* 累计统计 */}
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-5 text-center">
             <p className="text-2xl font-bold">{invitedCount}</p>
-            <p className="mt-1 text-sm text-neutral-500">已邀请好友</p>
+            <p className="mt-1 text-sm text-neutral-400">已邀请好友</p>
           </div>
-          <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
-            <p className="text-2xl font-bold text-brand">{formatBonus(totalReward)}</p>
-            <p className="mt-1 text-sm text-neutral-500">累计获得奖励</p>
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-5 text-center">
+            <p className="text-2xl font-bold text-brand-strong">{formatBonus(totalReward)}</p>
+            <p className="mt-1 text-sm text-neutral-400">累计获得奖励</p>
           </div>
         </div>
 
         {/* 邀请记录 */}
-        <div className="mt-4 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+        <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-6">
           <h2 className="font-semibold">邀请记录</h2>
           {records.length === 0 ? (
-            <p className="mt-3 text-sm text-neutral-400">还没有好友通过你的邀请注册</p>
+            <p className="mt-3 text-sm text-neutral-500">还没有好友通过你的邀请注册</p>
           ) : (
-            <ul className="mt-3 divide-y divide-neutral-100">
+            <ul className="mt-3 divide-y divide-white/[0.06]">
               {records.map((r) => (
                 <li key={r.id} className="flex items-center justify-between py-3">
                   <div>
                     <p className="text-sm font-medium">{maskPhone(r.invitee.phone)}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">
+                    <p className="mt-0.5 text-xs text-neutral-500">
                       {new Date(r.createdAt).toLocaleString("zh-CN", { hour12: false })}
                     </p>
                   </div>
-                  <span className="text-sm font-medium text-brand">
+                  <span className="text-sm font-medium text-brand-strong">
                     +{formatBonus(r.bonusInviterSec)}
                   </span>
                 </li>

@@ -54,7 +54,7 @@ export function FilterTabs({ current, counts }: FilterTabsProps) {
   }
 
   return (
-    <div className="relative inline-flex gap-1 border-b border-neutral-200">
+    <div className="relative inline-flex gap-1 border-b border-white/10">
       {OPTIONS.map((o, i) => {
         const selected = o.key === current;
         return (
@@ -67,11 +67,11 @@ export function FilterTabs({ current, counts }: FilterTabsProps) {
             onClick={() => select(o.key)}
             aria-pressed={selected}
             className={`relative px-3 pb-2.5 pt-1.5 text-sm transition-colors motion-reduce:transition-none ${
-              selected ? "font-medium text-neutral-900" : "text-neutral-500 hover:text-neutral-800"
+              selected ? "font-medium text-white" : "text-neutral-400 hover:text-neutral-200"
             }`}
           >
             {o.label}
-            <span className="ml-1.5 text-xs tabular-nums text-neutral-400">{counts[o.key === "" ? "all" : o.key]}</span>
+            <span className="ml-1.5 text-xs tabular-nums text-neutral-500">{counts[o.key === "" ? "all" : o.key]}</span>
           </button>
         );
       })}

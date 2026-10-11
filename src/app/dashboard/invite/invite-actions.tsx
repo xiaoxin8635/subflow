@@ -37,7 +37,7 @@ export function InviteActions({ inviteCode }: { inviteCode: string }) {
       <button
         type="button"
         onClick={() => void copy(inviteCode, "code")}
-        className="rounded-xl border border-black/10 px-5 py-2.5 text-sm font-medium text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+        className="rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
       >
         {copied === "code" ? "已复制码 ✓" : "复制邀请码"}
       </button>

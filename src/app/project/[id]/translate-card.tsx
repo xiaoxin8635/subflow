@@ -105,13 +105,13 @@ export function TranslateCard({
   const selectedLabel = langLabelOf(selected);
   const estimate = translateCostSeconds(Math.max(charCount, 1));
 
-  const chipActive = "border-brand bg-brand/5 text-brand";
-  const chipIdle = "border-black/10 text-neutral-600 hover:border-black/20";
+  const chipActive = "border-brand bg-brand-soft text-brand-strong";
+  const chipIdle = "border-white/10 text-neutral-400 hover:border-white/25 hover:text-neutral-200";
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-      <p className="text-xs text-neutral-400">按源字幕字数计费：每 1000 字 60 秒额度，最低 60 秒</p>
-      <p className="mt-1 text-sm text-neutral-500">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-6">
+      <p className="text-xs text-neutral-500">按源字幕字数计费：每 1000 字 60 秒额度，最低 60 秒</p>
+      <p className="mt-1 text-sm text-neutral-400">
         将整份字幕翻译为目标语言，生成新的字幕文件（时间轴与原文逐行对齐）。
       </p>
 
@@ -150,9 +150,9 @@ export function TranslateCard({
       </div>
 
       {/* 发起翻译 */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-neutral-50 px-4 py-3">
-        <p className="text-sm text-neutral-600">
-          翻译为{selectedLabel} · 预计消耗约 <span className="font-medium text-neutral-800">{estimate}</span> 秒额度
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-4 py-3">
+        <p className="text-sm text-neutral-400">
+          翻译为{selectedLabel} · 预计消耗约 <span className="font-medium text-neutral-200">{estimate}</span> 秒额度
           （以下单时实际字数为准）
         </p>
         <button
@@ -164,16 +164,16 @@ export function TranslateCard({
           {starting ? "提交中…" : "开始翻译"}
         </button>
       </div>
-      {msg && <p className="mt-3 text-sm text-red-600">{msg}</p>}
+      {msg && <p className="mt-3 text-sm text-red-400">{msg}</p>}
 
       {/* 已有翻译任务列表 */}
       {translations && translations.length > 0 && (
-        <ul className="mt-4 divide-y divide-neutral-100 border-t border-neutral-100">
+        <ul className="mt-4 divide-y divide-white/[0.06] border-t border-white/10">
           {translations.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{langLabelOf(t.targetLang)} 字幕</p>
-                <p className="mt-0.5 text-xs text-neutral-400">
+                <p className="mt-0.5 text-xs text-neutral-500">
                   {t.status === "DONE" &&
                     `已完成（${t.charCount ?? "?"} 字 · 消耗 ${t.costSeconds ?? "?"} 秒额度）`}
                   {t.status === "FAILED" && `失败：${t.error ?? "未知原因"}`}
@@ -185,34 +185,34 @@ export function TranslateCard({
                   <>
                     <a
                       href={`/api/translations/${t.id}/srt`}
-                      className="rounded-lg border border-black/10 px-2.5 py-1 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+                      className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
                     >
                       SRT
                     </a>
                     <a
                       href={`/api/translations/${t.id}/vtt`}
-                      className="rounded-lg border border-black/10 px-2.5 py-1 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+                      className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
                     >
                       VTT
                     </a>
                     <a
                       href={`/api/translations/${t.id}/ass`}
                       title="使用系统默认样式"
-                      className="rounded-lg border border-black/10 px-2.5 py-1 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+                      className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong"
                     >
                       ASS
                     </a>
                     <a
                       href={`/api/translations/${t.id}/srt?bilingual=1`}
                       title="原文在上、译文在下（每条字幕双行），可用于剪映等软件手动挂载"
-                      className="rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1 text-xs text-brand transition-colors hover:border-brand"
+                      className="rounded-lg border border-brand/40 bg-brand-soft px-2.5 py-1 text-xs text-brand-strong transition-colors hover:border-brand"
                     >
                       双语SRT
                     </a>
                     <a
                       href={`/api/translations/${t.id}/ass?bilingual=1`}
                       title="原文在上、译文在下（系统默认样式），可用于 mpv / PotPlayer 挂载或剪辑软件"
-                      className="rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1 text-xs text-brand transition-colors hover:border-brand"
+                      className="rounded-lg border border-brand/40 bg-brand-soft px-2.5 py-1 text-xs text-brand-strong transition-colors hover:border-brand"
                     >
                       双语ASS
                     </a>
@@ -220,7 +220,7 @@ export function TranslateCard({
                       type="button"
                       disabled={starting || hasActive}
                       onClick={() => void start(t.targetLang)}
-                      className="rounded-lg px-2.5 py-1 text-xs text-neutral-500 underline underline-offset-2 transition-colors hover:text-brand disabled:opacity-50"
+                      className="rounded-lg px-2.5 py-1 text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand-strong disabled:opacity-50"
                     >
                       重新翻译
                     </button>
@@ -231,7 +231,7 @@ export function TranslateCard({
                     type="button"
                     disabled={starting}
                     onClick={() => void start(t.targetLang)}
-                    className="rounded-lg border border-black/10 px-2.5 py-1 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
+                    className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-brand hover:text-brand-strong disabled:opacity-50"
                   >
                     重试
                   </button>
