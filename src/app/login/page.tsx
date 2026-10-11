@@ -1,18 +1,20 @@
 "use client";
 /**
- * @file 登录页（手机号 + 短信验证码）
+ * @file 登录页（手机号 + 短信验证码，支持邀请码）
  * @description 客户端组件：手机号格式校验、验证码 60 秒倒计时、提交登录。
+ *              邀请链接（/login?ref=CODE）自动填充邀请码，仅新用户注册时生效。
  *              依赖 API：POST /api/auth/sms（发码）、POST /api/auth/login（登录）。
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { PHONE_RE } from "@/lib/constants";
+import { PHONE_RE, INVITE_CODE_RE } from "@/lib/constants";
 
 /** 登录页组件 */
 export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [sending, setSending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -22,6 +24,16 @@ export default function LoginPage() {
 
   /** 手机号是否有效 */
   const phoneValid = PHONE_RE.test(phone);
+  /** 邀请码选填：空值合法，非空须匹配字符集 */
+  const inviteValid = inviteCode === "" || INVITE_CODE_RE.test(inviteCode.toUpperCase());
+
+  // 邀请链接 ?ref=CODE 自动填充（微任务包裹：避免 effect 内同步 setState 触发 eslint 规则）
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref) setInviteCode(ref.trim().toUpperCase());
+    });
+  }, []);
 
   /** 请求发送短信验证码，并启动 60 秒倒计时 */
   async function handleSendCode() {
@@ -53,16 +65,17 @@ export default function LoginPage() {
   /** 提交手机号 + 验证码登录，成功后跳转工作台 */
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!phoneValid || code.length !== 6 || submitting) return;
+    if (!phoneValid || code.length !== 6 || !inviteValid || submitting) return;
     setSubmitting(true);
     setMessage(null);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ phone, code, inviteCode: inviteCode.trim().toUpperCase() || undefined }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "登录失败");
+      const body = (await res.json().catch(() => ({}))) as { inviteApplied?: boolean };
+      if (!res.ok) throw new Error((body as { error?: string }).error ?? "登录失败");
       window.location.href = "/dashboard";
     } catch (e) {
       setMessage({ type: "error", text: e instanceof Error ? e.message : "登录失败" });
@@ -125,6 +138,24 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* 邀请码（选填，仅新用户注册时生效） */}
+            <div>
+              <label htmlFor="invite" className="mb-1.5 block text-sm font-medium">
+                邀请码 <span className="font-normal text-neutral-400">（选填）</span>
+              </label>
+              <input
+                id="invite"
+                type="text"
+                maxLength={8}
+                placeholder="好友邀请码，双方各得额外额度"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                className={`w-full rounded-xl border px-4 py-2.5 outline-none transition-colors focus:border-brand ${
+                  inviteValid ? "border-neutral-200" : "border-red-300"
+                }`}
+              />
+            </div>
+
             {/* 提示信息 */}
             {message && (
               <p
@@ -137,7 +168,7 @@ export default function LoginPage() {
             {/* 登录按钮 */}
             <button
               type="submit"
-              disabled={!phoneValid || code.length !== 6 || submitting}
+              disabled={!phoneValid || code.length !== 6 || !inviteValid || submitting}
               className="w-full rounded-xl bg-brand py-3 font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "登录中…" : "登录"}

@@ -54,6 +54,11 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       （英/日/韩/西/葡/繁中，qwen-flash 分批调用），时间轴与原文逐行对齐；
       按源字幕字数计费（每 1000 字 60 秒额度、最低 60 秒），SRT/VTT/ASS 三格式
       下载；独立翻译队列（Worker 并发可调）+ 完成站内通知 + 同语言进行中 409
+- [x] **P2.5 邀请裂变**（`docs/ROADMAP.md` 第三期）：每用户唯一邀请码（首访懒生成，
+      8 位去易混字符），新用户注册带码双方各得 10 分钟额度（注册事务内原子发奖，
+      `INVITE_REWARD`/`INVITEE_BONUS` 双流水）；邀请页展示码/复制链接/统计/脱敏
+      记录，登录页支持 `?ref=` 自动带码，无效码静默忽略不阻断注册，同一账号
+      仅可被邀请一次（unique 防刷）
 - [ ] **上线动作**（需人工）：购服务器 + ICP 备案 + 短信报备 + 收款码（见 `DEPLOY.md` 清单）
 
 ### 导出与额度说明（模块 ④）
@@ -203,6 +208,23 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
 - **队列**：独立 `translate` 队列，Worker 并发 `TRANSLATE_CONCURRENCY`（默认 2）；
   重试用尽标记 FAILED 并钉钉告警，完成/失败均写站内通知
 
+### 邀请裂变说明（P2.5）
+
+- **邀请码**：每用户唯一 8 位码（字符集去掉 0/O/1/I 易混字符，
+  [src/lib/invite.ts](src/lib/invite.ts)）；首访邀请页时懒生成落库，无预生成脚本
+- **奖励规则**：新用户**注册时**填写邀请码，双方各得 10 分钟额度
+  （`INVITE_REWARD_INVITER_SECONDS` / `INVITE_REWARD_INVITEE_SECONDS`，env 可调），
+  叠加在 30 分钟注册赠送之上；老用户带码再登录无效（仅注册分支生效）
+- **原子性**：发奖在注册事务内完成——邀请人加余额 + `INVITE_REWARD` 流水 +
+  `InviteRecord` 落库，被邀请人余额 = 注册赠送 + 邀请奖励 + `INVITEE_BONUS` 流水；
+  无效/非法码静默忽略，绝不阻断注册
+- **防刷**：`InviteRecord.inviteeId` unique 约束——同一账号终身仅可被邀请一次；
+  邀请码格式白名单正则（不匹配直接忽略，不查库）
+- **页面**：`/dashboard/invite` 邀请页（码/复制链接/复制码/累计统计/脱敏记录，
+  [src/app/dashboard/invite/](src/app/dashboard/invite/)）；`/login?ref=CODE` 自动
+  填充邀请码输入框；工作台顶栏「邀请好友」入口
+- **API**：`GET /api/invite`（邀请码 + 奖励规则 + 统计 + 记录列表，手机号脱敏）
+
 ### CI 说明（P1.7）
 
 - `.github/workflows/ci.yml`：push/PR 到 main 自动触发，两个 job：
@@ -315,6 +337,10 @@ node scripts/e2e-user-style-test.mjs
 # P2.4 字幕翻译专项：语言白名单 → 余额 402 → 真实翻译两语言（调用 DashScope，约几分钱）
 # → 三格式下载 → 计费/流水/通知 → 同语言 409 → 越权 → 限流 429（注入 PENDING 零 LLM 成本）
 node scripts/e2e-translate-test.mjs
+
+# P2.5 邀请裂变专项：未登录 401 → 首访懒生成邀请码 → 带码注册双方发奖（余额/流水/记录）
+# → 老用户带码无效 → 无效码静默 → invitee unique 防刷 → 邀请页/登录页/工作台 SSR
+node scripts/e2e-invite-test.mjs
 
 # 配置 OSS Bucket CORS（浏览器直传必需，每个 Bucket 执行一次）
 npx tsx scripts/setup-oss-cors.ts

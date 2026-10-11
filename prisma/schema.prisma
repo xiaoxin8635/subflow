@@ -24,6 +24,7 @@ model User {
   phone         String   @unique // 手机号（国内登录主键）
   nickname      String?
   balanceSeconds Int     @default(0) // 剩余额度（秒），注册赠送 + 购买/兑换累加
+  inviteCode    String?  @unique // 我的邀请码（懒生成，8 位无混淆字符，P2.5）
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -34,6 +35,26 @@ model User {
   sessions      Session[]
   notifications Notification[]
   userStyles    UserStyle[]
+  invitesSent   InviteRecord[]  @relation("inviter") // 我邀请过的人
+  inviteReceived InviteRecord?  @relation("invitee") // 邀请我的人（一人最多被邀请一次）
+}
+
+// ---------------------------------------------------------------------
+// 邀请记录（P2.5 邀请裂变）：新用户注册时携带邀请码 → 双方得额度；
+// inviteeId unique 保证一个账号只能被邀请一次（防重复刷奖）
+// ---------------------------------------------------------------------
+model InviteRecord {
+  id              String   @id @default(cuid())
+  inviterId       String // 邀请人
+  inviteeId       String   @unique // 被邀请人（新注册用户）
+  bonusInviterSec Int // 邀请人获得的奖励（秒，快照）
+  bonusInviteeSec Int // 被邀请人额外获得的奖励（秒，快照）
+  createdAt       DateTime @default(now())
+
+  inviter User @relation("inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User @relation("invitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([inviterId, createdAt])
 }
 
 // ---------------------------------------------------------------------

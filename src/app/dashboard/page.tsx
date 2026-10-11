@@ -79,6 +79,10 @@ export default async function DashboardPage({
               <Link href="/dashboard/redeem" className="text-neutral-500 transition-colors hover:text-brand">
                 兑换额度
               </Link>
+              <span className="mx-2 text-neutral-300">|</span>
+              <Link href="/dashboard/invite" className="text-neutral-500 transition-colors hover:text-brand">
+                邀请好友
+              </Link>
             </div>
             <Link
               href="/dashboard/new"

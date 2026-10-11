@@ -100,3 +100,18 @@ export function translateCostSeconds(charCount: number): number {
 
 /** 翻译任务限流：每用户每小时最多发起次数（防 LLM 成本被刷） */
 export const TRANSLATE_RATE_LIMIT_PER_HOUR = 10;
+
+/** 邀请奖励（P2.5 邀请裂变）：邀请人每邀 1 名新用户获得的额度（秒），可用环境变量覆盖 */
+export const INVITE_REWARD_INVITER_SECONDS = Number(process.env.INVITE_REWARD_INVITER_SECONDS ?? 600);
+
+/** 邀请奖励：被邀请的新用户注册时额外获得的额度（秒，叠加在注册赠送之上） */
+export const INVITE_REWARD_INVITEE_SECONDS = Number(process.env.INVITE_REWARD_INVITEE_SECONDS ?? 600);
+
+/** 邀请码字符集：去掉易混淆的 0/O/1/I（32 个字符，8 位码空间约 1.1 万亿） */
+export const INVITE_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+/** 邀请码长度 */
+export const INVITE_CODE_LENGTH = 8;
+
+/** 邀请码格式校验（前后端共用：仅字符集内的大写字母数字，8 位） */
+export const INVITE_CODE_RE = /^[2-9A-HJ-NP-Z]{8}$/;
