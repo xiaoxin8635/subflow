@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@prisma/client";
 import { formatDuration, ProjectStatusBadge } from "@/components/project-status";
+import { ProjectCover } from "@/components/project-cover";
 import {
   browserNotify,
   notificationPermission,
@@ -24,6 +25,8 @@ export interface ProjectDetail {
   status: ProjectStatus;
   /** 媒体类型：video（可烧录成片）/ audio（仅字幕文件下载） */
   mediaKind?: "video" | "audio";
+  /** 封面存储 key（转写开始后由 pipeline 旁路生成；音频项目恒为 null） */
+  coverKey?: string | null;
   durationSec: number | null;
   error: string | null;
   /** UPLOADED（排队中）时的转写队列位置（1 起；null = 队列信息不可用/已在处理） */
@@ -127,8 +130,8 @@ export function ProjectLiveView({
 
   return (
     <div className="mt-4">
-      {/* 标题与状态 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* 标题与状态（字幕条徽章紧挨标题，剪辑台项目头语言） */}
+      <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{project.title}</h1>
         <ProjectStatusBadge status={project.status} />
       </div>
@@ -138,19 +141,31 @@ export function ProjectLiveView({
         {project.transcript?.llmPolished ? "已经 AI 润色" : "未润色"}
       </p>
 
-      {/* 处理中提示 */}
+      {/* 处理中：监视器占位（转写中封面带扫描线，与工作台列表同款母语）+ 状态行 */}
       {ACTIVE_STATUSES.has(project.status) && (
-        <div className="mt-10 flex min-h-[300px] flex-col items-center justify-center rounded-2xl border border-black/5 bg-white text-center shadow-sm">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand/20 border-t-brand" />
-          <p className="mt-5 font-medium">
-            {project.status === "TRANSCRIBING"
-              ? "AI 正在识别语音…"
-              : project.status === "POLISHING"
-                ? "AI 正在润色字幕…"
-                : project.queuePosition
-                  ? `排队中（第 ${project.queuePosition} 位）…`
-                  : "任务排队中…"}
-          </p>
+        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-black/5 bg-white p-4 text-center shadow-sm sm:p-5">
+          <ProjectCover
+            projectId={projectId}
+            coverKey={project.coverKey ?? null}
+            mediaKind={project.mediaKind ?? "video"}
+            durationSec={project.durationSec}
+            status={project.status}
+          />
+          <div className="mt-4 flex items-center justify-center gap-2.5">
+            <span
+              aria-hidden
+              className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand/20 border-t-brand"
+            />
+            <p className="font-medium">
+              {project.status === "TRANSCRIBING"
+                ? "AI 正在识别语音…"
+                : project.status === "POLISHING"
+                  ? "AI 正在润色字幕…"
+                  : project.queuePosition
+                    ? `排队中（第 ${project.queuePosition} 位）…`
+                    : "任务排队中…"}
+            </p>
+          </div>
           <p className="mt-1 text-sm text-neutral-500">
             {project.status === "UPLOADED" && project.queuePosition
               ? "前面的任务完成后自动开始，页面自动刷新，无需手动操作"
@@ -160,7 +175,7 @@ export function ProjectLiveView({
             <button
               type="button"
               onClick={() => void requestNotificationPermission().then(setPerm)}
-              className="mt-4 text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand"
+              className="mt-3 text-xs text-neutral-400 underline underline-offset-2 transition-colors hover:text-brand"
             >
               开启完成提醒（切到其他页面时通知你）
             </button>
@@ -170,7 +185,7 @@ export function ProjectLiveView({
 
       {/* 失败提示 */}
       {project.status === "FAILED" && (
-        <div className="mt-10 rounded-2xl border border-red-100 bg-red-50 p-6 text-center">
+        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-red-100 bg-red-50 p-6 text-center">
           <div className="text-3xl">⚠️</div>
           <p className="mt-3 font-medium text-red-700">处理失败</p>
           <p className="mt-1 text-sm text-red-600">{project.error ?? "未知错误"}</p>
@@ -181,7 +196,7 @@ export function ProjectLiveView({
       {/* 字幕编辑器 + 翻译卡（READY） */}
       {project.status === "READY" &&
         (segments.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
+          <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
             <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
         ) : (
@@ -193,11 +208,13 @@ export function ProjectLiveView({
               durationSec={project.durationSec ?? 0}
               mediaKind={project.mediaKind ?? "video"}
             />
-            {/* 翻译卡：预估字数取当前源字幕总字符数 */}
-            <TranslateCard
-              projectId={projectId}
-              charCount={segments.reduce((n, s) => n + s.text.length, 0)}
-            />
+            {/* 翻译卡：预估字数取当前源字幕总字符数（次要工具，收窄与列表页卡片同级） */}
+            <div className="mx-auto max-w-3xl">
+              <TranslateCard
+                projectId={projectId}
+                charCount={segments.reduce((n, s) => n + s.text.length, 0)}
+              />
+            </div>
           </>
         ))}
     </div>

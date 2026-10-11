@@ -4,7 +4,7 @@
  *              「工具面板」，内容区是「画面」。桌面（≥lg）左侧固定 240px 面板；
  *              窄屏收纳为顶部横向标签栏（可横滑）。底部用户区含脱敏手机号、
  *              通知铃铛、余额与退出登录。当前项由各页面传入 active 标识高亮。
- *              营销页与项目详情页（编辑器需全宽）仍用 SiteHeader，不套本外壳。
+ *              营销页（首页/价格/法务）仍用 SiteHeader，不套本外壳。
  */
 import Link from "next/link";
 import { maskPhone } from "@/lib/auth";
