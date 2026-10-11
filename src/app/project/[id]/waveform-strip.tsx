@@ -1,11 +1,13 @@
 "use client";
 /**
- * @file 音频波形时间轴（字幕编辑器右列顶部，剪辑台母题的「音轨」元素）
+ * @file 音频波形时间轴 + 字幕段落块拖拽编辑（字幕编辑器右列顶部，剪辑台母题的「音轨」元素）
  * @description 渲染转写时旁路生成的音频波形峰值 JSON（GET /api/projects/[id]/waveform）：
  *               Canvas 柱状波形（每 CSS 像素一列，聚合取桶内最大值，整体归一化）+
- *               已播放区域 brand 染色 + 线性播放头；点击/横向拖动定位（只 seek 不播放，
- *               与行点击「跳转并播放」语义区分）。加载失败/旧项目无波形数据时整体不渲染
- *               （编辑器退化为此前的纯轨道位置条形态，绝不阻断编辑）。
+ *               已播放区域 brand 染色 + 线性播放头 + 字幕段落块（半透明覆盖在波形上）。
+ *               交互：点击空白处定位播放头（只 seek 不播放）；段落块支持三种拖拽——
+ *               左缘改起点 / 右缘改终点 / 整体平移，拖拽中仅更新本地预览（不重渲染列表），
+ *               释放时一次性回调 onSegmentChange（父组件负责快照撤销与 dirty）。
+ *               加载失败/旧项目无波形数据时整体不渲染（编辑器退化为行内轨道位置条形态）。
  */
 import { useEffect, useRef, useState } from "react";
 
@@ -17,27 +19,60 @@ interface WaveformData {
   peaks: number[];
 }
 
+/** 波形上叠加的字幕段落（只读子集：时间区间；编辑经 onSegmentChange 回传） */
+export interface WaveformSegment {
+  start: number;
+  end: number;
+}
+
+/** 拖拽模式：左缘调起点 / 右缘调终点 / 中间整体平移 */
+type DragMode = "start" | "end" | "move";
+
+/** 拖拽中的本地预览（释放前不落 segments，避免拖拽过程高频重渲染列表） */
+interface DragPreview {
+  idx: number;
+  mode: DragMode;
+  /** 按下的 clientX（move 模式计算位移用） */
+  downX: number;
+  /** 按下时该句原始时间 */
+  origStart: number;
+  origEnd: number;
+  /** 预览中的当前时间区间 */
+  start: number;
+  end: number;
+}
+
+/** 单句最小可识别时长（秒）：防止拖拽把句子拖没 */
+const MIN_SEG_SEC = 0.1;
+
 /**
  * 波形时间轴组件
- * @param projectId   项目 ID（波形 JSON 接口地址）
- * @param durationSec 媒体时长（秒），播放头进度与点击定位换算用
- * @param currentTime 当前播放时间（秒，父组件 onTimeUpdate 驱动）
- * @param onSeek      定位回调（纯 seek 不播放）
+ * @param projectId       项目 ID（波形 JSON 接口地址）
+ * @param durationSec     媒体时长（秒），播放头进度与拖拽换算用
+ * @param currentTime     当前播放时间（秒，父组件 onTimeUpdate 驱动）
+ * @param segments        字幕时间区间列表（渲染段落块；与行列表同序）
+ * @param onSeek          定位回调（纯 seek 不播放）
+ * @param onSegmentChange 拖拽释放回调：某句时间被调整（父组件负责撤销快照与保存）
  */
 export function WaveformStrip({
   projectId,
   durationSec,
   currentTime,
+  segments,
   onSeek,
+  onSegmentChange,
 }: {
   projectId: string;
   durationSec: number;
   currentTime: number;
+  segments: WaveformSegment[];
   onSeek: (t: number) => void;
+  onSegmentChange: (idx: number, next: { start: number; end: number }) => void;
 }) {
   const [peaks, setPeaks] = useState<number[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [boxW, setBoxW] = useState(0);
+  const [drag, setDrag] = useState<DragPreview | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +127,7 @@ export function WaveformStrip({
     if (!ctx) return;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, boxW, h);
-    ctx.fillStyle = "#d4d4d8"; // neutral-300：底图中性，播放进度由上层遮罩染色
+    ctx.fillStyle = "#d4d4d8"; // neutral-300：底图中性，段落块与播放染色叠于其上
     let max = 0;
     for (const p of peaks) if (p > max) max = p;
     if (max === 0) max = 1;
@@ -114,11 +149,62 @@ export function WaveformStrip({
   const progress = durationSec > 0 ? Math.min(1, Math.max(0, currentTime / durationSec)) : 0;
 
   /** 指针事件 → 时间（横向 clamp 到 [0, durationSec]） */
-  function seekFromEvent(e: React.PointerEvent<HTMLDivElement>) {
-    if (durationSec <= 0) return;
+  function timeFromEvent(clientX: number): number {
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0 || durationSec <= 0) return 0;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * durationSec;
+  }
+
+  /**
+   * 段落块按下：按命中位置决定拖拽模式（左右 8px 为调边，中间为平移），
+   * 记录原始时间——后续 move 全部以按下时快照为基准计算（免累积误差）
+   */
+  function onBlockDown(e: React.PointerEvent<HTMLDivElement>, idx: number) {
+    if (durationSec <= 0 || drag) return;
+    e.stopPropagation(); // 不触发底层的空白定位
+    e.currentTarget.setPointerCapture(e.pointerId);
     const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    onSeek(ratio * durationSec);
+    const seg = segments[idx];
+    const relX = e.clientX - rect.left;
+    const mode: DragMode = relX <= 8 ? "start" : relX >= rect.width - 8 ? "end" : "move";
+    setDrag({ idx, mode, downX: e.clientX, origStart: seg.start, origEnd: seg.end, start: seg.start, end: seg.end });
+  }
+
+  /** 拖拽移动：按模式换算新时间区间（start≥0、end≤duration、end-start≥最小句长） */
+  function onDragMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drag) return;
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const secPerPx = durationSec / rect.width;
+    const dt = (e.clientX - drag.downX) * secPerPx;
+    let start = drag.origStart;
+    let end = drag.origEnd;
+    if (drag.mode === "start") {
+      start = Math.min(Math.max(0, drag.origStart + dt), drag.origEnd - MIN_SEG_SEC);
+    } else if (drag.mode === "end") {
+      end = Math.max(Math.min(durationSec, drag.origEnd + dt), drag.origStart + MIN_SEG_SEC);
+    } else {
+      const span = drag.origEnd - drag.origStart;
+      start = Math.min(Math.max(0, drag.origStart + dt), durationSec - span);
+      end = start + span;
+    }
+    setDrag({ ...drag, start, end });
+  }
+
+  /** 拖拽释放：无实际变化则丢弃预览，有变化一次性回调父组件落 segments */
+  function onDragUp() {
+    if (!drag) return;
+    const changed =
+      Math.abs(drag.start - drag.origStart) > 1e-6 || Math.abs(drag.end - drag.origEnd) > 1e-6;
+    if (changed) onSegmentChange(drag.idx, { start: Math.round(drag.start * 100) / 100, end: Math.round(drag.end * 100) / 100 });
+    setDrag(null);
+  }
+
+  /** 空白处（非段落块）按下 → 定位播放头（复用指针坐标换算；不播放） */
+  function onBackgroundDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onSeek(timeFromEvent(e.clientX));
   }
 
   return (
@@ -138,33 +224,81 @@ export function WaveformStrip({
           onSeek(Math.min(durationSec, Math.max(0, currentTime + delta)));
         }
       }}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        seekFromEvent(e);
-      }}
+      onPointerDown={onBackgroundDown}
       onPointerMove={(e) => {
-        if (e.buttons & 1) seekFromEvent(e); // 按住左键拖动 scrub
+        if (drag) onDragMove(e);
+        else if (e.buttons & 1) onSeek(timeFromEvent(e.clientX)); // 空白处按住左键拖动 scrub
       }}
-      className="relative h-12 cursor-pointer touch-none select-none overflow-hidden rounded-lg bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1"
-      title="点击或拖动定位播放"
+      onPointerUp={() => onDragUp()}
+      className="relative h-16 cursor-pointer touch-none select-none overflow-visible rounded-lg bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1"
+      title="点击定位 · 拖动字幕块边缘调时间 · 拖动块整体平移"
     >
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full rounded-lg" />
       {/* 已播放区域染色 + 播放头（timeupdate ~4Hz，线性过渡补间让移动连续）；
-          波形数据到位前只显示骨架灰底 */}
+          波形数据到位前只显示骨架灰底。拖拽预览中的播放染色冻结（progress 暂停更新）以免视觉抖动 */}
       {peaks && durationSec > 0 && (
         <>
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-0 bg-brand/10"
+            className="pointer-events-none absolute inset-y-0 left-0 rounded-l-lg bg-brand/10"
             style={{ width: `${progress * 100}%` }}
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 w-0.5 bg-brand transition-[left] duration-150 ease-linear"
+            className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-brand transition-[left] duration-150 ease-linear"
             style={{ left: `calc(${progress * 100}% - 1px)` }}
           />
         </>
       )}
+
+      {/* 字幕段落块：波形上的可拖拽「字幕轨」（与行列表同序；拖拽中该块用预览时间） */}
+      {peaks &&
+        durationSec > 0 &&
+        segments.map((seg, idx) => {
+          const s = drag?.idx === idx ? drag.start : seg.start;
+          const e_ = drag?.idx === idx ? drag.end : seg.end;
+          const left = Math.max(0, (s / durationSec) * 100);
+          const width = Math.max(0.5, Math.min(100 - left, ((e_ - s) / durationSec) * 100));
+          const isDragging = drag?.idx === idx;
+          return (
+            <div
+              key={idx}
+              onPointerDown={(e) => onBlockDown(e, idx)}
+              onPointerMove={onDragMove}
+              onPointerUp={onDragUp}
+              className={`group absolute inset-y-1 rounded-md border transition-colors ${
+                isDragging
+                  ? "z-20 cursor-ew-resize border-brand bg-brand/40 shadow-sm"
+                  : "cursor-grab border-brand/50 bg-brand/25 hover:bg-brand/35"
+              }`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+              title={`第 ${idx + 1} 句（拖动边缘调时间，拖动中间平移）`}
+            >
+              {/* 左右拖拽手柄（视觉提示：hover 时边缘竖条加深） */}
+              <span
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-2 rounded-l-md bg-brand/0 transition-colors group-hover:bg-brand/50"
+              />
+              <span
+                aria-hidden
+                className="absolute inset-y-0 right-0 w-2 rounded-r-md bg-brand/0 transition-colors group-hover:bg-brand/50"
+              />
+              {/* 拖拽中的时间提示 */}
+              {isDragging && (
+                <span className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-0.5 font-mono text-xs tabular-nums text-white">
+                  {fmtWave(s)}–{fmtWave(e_)}
+                </span>
+              )}
+            </div>
+          );
+        })}
     </div>
   );
+}
+
+/** 波形拖拽提示用时间格式（mm:ss.d，与编辑器 fmt 一致） */
+function fmtWave(t: number): string {
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${String(m).padStart(2, "0")}:${s.toFixed(1).padStart(4, "0")}`;
 }

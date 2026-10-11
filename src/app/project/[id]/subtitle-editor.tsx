@@ -4,7 +4,8 @@
  * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换/微调），右侧分段列表。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
  *         删除行、上方插入行、时间轴批量调整（整体偏移/整体伸缩 + 撤销）、
- *         音频波形时间轴（点击/拖动定位，waveformKey 存在时渲染）、
+ *         音频波形时间轴（点击/拖动定位；波形上叠加字幕段落块，拖边缘调起止/拖整体平移，
+ *         waveformKey 存在时渲染）、
  *         选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
  *         描边/高亮）、另存为我的模板、删除我的模板、保存（PUT 全量 segments）、
  *         导出成片（ExportCard：携带当前预览样式快照烧录，所见即所得 + 额度扣减 + 下载）。
@@ -204,6 +205,16 @@ export function SubtitleEditor({
   /** 波形时间轴定位：只 seek 不播放（与行点击「跳转并播放」语义区分） */
   function seekOnly(t: number) {
     if (videoRef.current) videoRef.current.currentTime = t;
+  }
+
+  /**
+   * 波形上拖拽字幕块后的落位回调：先快照撤销基线（与批量调整共用一步撤销），
+   * 再更新该行时间区间——dirty/保存/导出拦截均由既有 setSegments 链路自动联动
+   */
+  function handleWaveformEdit(idx: number, next: { start: number; end: number }) {
+    setTlUndo(segments);
+    setSegments((prev) => prev.map((s, i) => (i === idx ? { ...s, ...next } : s)));
+    setMessage({ type: "ok", text: `第 ${idx + 1} 句时间已调整，请核对后点「保存修改」` });
   }
 
   /** 更新某行字段 */
@@ -696,7 +707,9 @@ export function SubtitleEditor({
               projectId={projectId}
               durationSec={durationSec}
               currentTime={currentTime}
+              segments={segments.map((s) => ({ start: s.start, end: s.end }))}
               onSeek={seekOnly}
+              onSegmentChange={handleWaveformEdit}
             />
           </div>
         )}
