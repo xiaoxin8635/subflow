@@ -94,6 +94,8 @@ export function SubtitleEditor({
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoBoxRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
+  // 已保存基线：dirty 由此计算，保存成功后同步——保证「已保存」按钮态与库内数据自洽
+  const savedBaselineRef = useRef(JSON.stringify(initialSegments));
 
   // 加载样式列表（官方模板 + 我的模板）并选中默认样式
   useEffect(() => {
@@ -151,6 +153,41 @@ export function SubtitleEditor({
     row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeIdx]);
 
+  // 剪辑快捷键：空格播放/暂停 · ←/→ 快退/快进 2 秒 · Ctrl/Cmd+S 保存
+  // （焦点在输入控件时不劫持；每次渲染重挂监听以捕获最新 dirty/saving 状态）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const video = videoRef.current;
+      if (!video) return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (video.paused) void video.play().catch(() => {});
+        else video.pause();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 2);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        video.currentTime = Math.min(video.duration || Number.MAX_SAFE_INTEGER, video.currentTime + 2);
+      } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (dirty && !saving) void handleSave();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   /** 点击行：跳到该行起点并播放 */
   function seekTo(t: number) {
     if (videoRef.current) {
@@ -181,9 +218,8 @@ export function SubtitleEditor({
     setEditingIdx(idx);
   }
 
-  /** 是否有未保存修改 */
-  const dirty =
-    JSON.stringify(segments) !== JSON.stringify(initialSegments);
+  /** 是否有未保存修改（相对最近一次保存的基线，而非服务端首屏快照） */
+  const dirty = JSON.stringify(segments) !== savedBaselineRef.current;
 
   /**
    * 应用整体偏移：所有行 start/end 平移 delta 秒（正=后移）
@@ -316,6 +352,8 @@ export function SubtitleEditor({
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(body.error ?? `保存失败（HTTP ${res.status}）`);
+      // 保存成功：同步基线，dirty 归零（按钮回「已保存」）
+      savedBaselineRef.current = JSON.stringify(segments);
       setMessage({ type: "ok", text: "字幕已保存" });
     } catch (e) {
       setMessage({ type: "err", text: e instanceof Error ? e.message : "保存失败" });
@@ -637,6 +675,9 @@ export function SubtitleEditor({
             {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
           </button>
         </div>
+        <p className="mt-1 text-xs text-neutral-400">
+          快捷键：空格 播放/暂停 · ← → 快退/快进 2 秒 · Ctrl+S 保存
+        </p>
 
         {/* 时间轴批量调整（整体与语音不同步时使用；纯前端计算，保存走统一 PUT） */}
         <div className="mt-2">
@@ -769,39 +810,57 @@ export function SubtitleEditor({
                     </div>
                   </div>
                 ) : (
-                  /* ---------- 展示态 ---------- */
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => seekTo(seg.start)}
-                      className="shrink-0 pt-0.5 font-mono text-xs text-neutral-400 transition-colors hover:text-brand"
-                      title="跳转到此句"
-                    >
-                      {fmt(seg.start)}
-                    </button>
-                    <p
-                      className="flex-1 cursor-text text-sm leading-6"
-                      onDoubleClick={() => setEditingIdx(idx)}
-                      title="双击编辑"
-                    >
-                      {seg.text}
-                    </p>
-                    <div className="flex shrink-0 gap-1">
+                  /* ---------- 展示态（轨道片段语言：时间区间 + 文本 + 整片位置条） ---------- */
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-3">
                       <button
-                        onClick={() => insertBefore(idx)}
-                        className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-brand"
-                        title="在上方插入一行"
+                        onClick={() => seekTo(seg.start)}
+                        className="shrink-0 pt-0.5 font-mono text-xs tabular-nums text-neutral-400 transition-colors hover:text-brand"
+                        title="跳转到此句"
                       >
-                        ＋
+                        {fmt(seg.start)}
+                        <span className="text-neutral-300">–{fmt(seg.end)}</span>
                       </button>
-                      <button
-                        onClick={() => removeSegment(idx)}
-                        disabled={segments.length <= 1}
-                        className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
-                        title="删除此行"
+                      <p
+                        className="flex-1 cursor-text text-sm leading-6"
+                        onDoubleClick={() => setEditingIdx(idx)}
+                        title="双击编辑"
                       >
-                        ✕
-                      </button>
+                        {seg.text}
+                      </p>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          onClick={() => insertBefore(idx)}
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-brand"
+                          title="在上方插入一行"
+                        >
+                          ＋
+                        </button>
+                        <button
+                          onClick={() => removeSegment(idx)}
+                          disabled={segments.length <= 1}
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="删除此行"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
+                    {/* 轨道位置条：该句在整片时间轴上的位置（当前播放句高亮为实色） */}
+                    {durationSec > 0 && (
+                      <div className="relative h-1 overflow-hidden rounded-full bg-neutral-100">
+                        <span
+                          aria-hidden
+                          className={`absolute inset-y-0 rounded-full transition-colors ${
+                            isActive ? "bg-brand" : "bg-brand/25"
+                          }`}
+                          style={{
+                            left: `${Math.min(100, (seg.start / durationSec) * 100)}%`,
+                            width: `${Math.max(1.5, ((seg.end - seg.start) / durationSec) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
