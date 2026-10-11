@@ -94,7 +94,7 @@ export function SubtitleEditor({
   const [offsetSec, setOffsetSec] = useState("0");
   const [scaleRatio, setScaleRatio] = useState("1.00");
   const [tlUndo, setTlUndo] = useState<EditorSegment[] | null>(null);
-  const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "ok" | "err" | "warn"; text: string } | null>(null);
   const [containerH, setContainerH] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -209,12 +209,24 @@ export function SubtitleEditor({
 
   /**
    * 波形上拖拽字幕块后的落位回调：先快照撤销基线（与批量调整共用一步撤销），
-   * 再更新该行时间区间——dirty/保存/导出拦截均由既有 setSegments 链路自动联动
+   * 再更新该行时间区间——dirty/保存/导出拦截均由既有 setSegments 链路自动联动。
+   * 释放后与其他句做重叠检测：重叠仅提示（warn）不拦截——与 PUT 校验一致，
+   * 重叠是合法状态（配音重叠场景），但要用户知情
    */
   function handleWaveformEdit(idx: number, next: { start: number; end: number }) {
     setTlUndo(segments);
     setSegments((prev) => prev.map((s, i) => (i === idx ? { ...s, ...next } : s)));
-    setMessage({ type: "ok", text: `第 ${idx + 1} 句时间已调整，请核对后点「保存修改」` });
+    const clash = segments.findIndex(
+      (s, i) => i !== idx && s.start < next.end - 1e-9 && next.start < s.end - 1e-9,
+    );
+    if (clash >= 0) {
+      setMessage({
+        type: "warn",
+        text: `第 ${idx + 1} 句与第 ${clash + 1} 句时间重叠了，播放时会两句同显，请留意`,
+      });
+    } else {
+      setMessage({ type: "ok", text: `第 ${idx + 1} 句时间已调整，请核对后点「保存修改」` });
+    }
   }
 
   /** 更新某行字段 */
@@ -707,7 +719,7 @@ export function SubtitleEditor({
               projectId={projectId}
               durationSec={durationSec}
               currentTime={currentTime}
-              segments={segments.map((s) => ({ start: s.start, end: s.end }))}
+              segments={segments.map((s) => ({ start: s.start, end: s.end, text: s.text }))}
               onSeek={seekOnly}
               onSegmentChange={handleWaveformEdit}
             />
@@ -782,7 +794,15 @@ export function SubtitleEditor({
         </div>
 
         {message && (
-          <p className={`mt-2 text-sm ${message.type === "err" ? "text-red-600" : "text-green-600"}`}>
+          <p
+            className={`mt-2 text-sm ${
+              message.type === "err"
+                ? "text-red-600"
+                : message.type === "warn"
+                  ? "text-amber-600"
+                  : "text-green-600"
+            }`}
+          >
             {message.text}
           </p>
         )}

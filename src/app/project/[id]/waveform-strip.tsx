@@ -3,11 +3,13 @@
  * @file 音频波形时间轴 + 字幕段落块拖拽编辑（字幕编辑器右列顶部，剪辑台母题的「音轨」元素）
  * @description 渲染转写时旁路生成的音频波形峰值 JSON（GET /api/projects/[id]/waveform）：
  *               Canvas 柱状波形（每 CSS 像素一列，聚合取桶内最大值，整体归一化）+
- *               已播放区域 brand 染色 + 线性播放头 + 字幕段落块（半透明覆盖在波形上）。
- *               交互：点击空白处定位播放头（只 seek 不播放）；段落块支持三种拖拽——
- *               左缘改起点 / 右缘改终点 / 整体平移，拖拽中仅更新本地预览（不重渲染列表），
- *               释放时一次性回调 onSegmentChange（父组件负责快照撤销与 dirty）。
- *               加载失败/旧项目无波形数据时整体不渲染（编辑器退化为行内轨道位置条形态）。
+ *               已播放区域 brand 染色 + 线性播放头 + 字幕段落块（半透明覆盖在波形上，
+ *               块内截断显示句文字）。交互：点击空白处定位播放头（只 seek 不播放）；
+ *               段落块支持三种拖拽——左缘改起点 / 右缘改终点 / 整体平移，
+ *               拖拽中仅更新本地预览（不重渲染列表），释放时一次性回调
+ *               onSegmentChange（父组件负责快照撤销与 dirty）。与其他句时间重叠的块
+ *               显示琥珀警示色（仅提示不拦截）。加载失败/旧项目无波形数据时整体
+ *               不渲染（编辑器退化为行内轨道位置条形态）。
  */
 import { useEffect, useRef, useState } from "react";
 
@@ -19,10 +21,12 @@ interface WaveformData {
   peaks: number[];
 }
 
-/** 波形上叠加的字幕段落（只读子集：时间区间；编辑经 onSegmentChange 回传） */
+/** 波形上叠加的字幕段落（与行列表同序；编辑经 onSegmentChange 回传） */
 export interface WaveformSegment {
   start: number;
   end: number;
+  /** 句文字（块内截断展示；缺省不显示） */
+  text?: string;
 }
 
 /** 拖拽模式：左缘调起点 / 右缘调终点 / 中间整体平移 */
@@ -44,6 +48,11 @@ interface DragPreview {
 
 /** 单句最小可识别时长（秒）：防止拖拽把句子拖没 */
 const MIN_SEG_SEC = 0.1;
+
+/** 两句时间是否重叠（开区间相交；邻接不算，1e-9 容浮点误差） */
+function segOverlap(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+  return a.start < b.end - 1e-9 && b.start < a.end - 1e-9;
+}
 
 /**
  * 波形时间轴组件
@@ -251,12 +260,18 @@ export function WaveformStrip({
         </>
       )}
 
-      {/* 字幕段落块：波形上的可拖拽「字幕轨」（与行列表同序；拖拽中该块用预览时间） */}
+      {/* 字幕段落块：波形上的可拖拽「字幕轨」（与行列表同序；拖拽中该块用预览时间）。
+          与其他句重叠的块显示琥珀警示色（仅提示不拦截——重叠合法但要用户知情，
+          拖拽中按预览区间实时检测，拖出重叠立刻变色） */}
       {peaks &&
         durationSec > 0 &&
         segments.map((seg, idx) => {
           const s = drag?.idx === idx ? drag.start : seg.start;
           const e_ = drag?.idx === idx ? drag.end : seg.end;
+          const live = { start: s, end: e_ };
+          const overlapping = segments.some(
+            (o, j) => j !== idx && segOverlap(live, drag?.idx === j ? { start: o.start, end: o.end } : o),
+          );
           const left = Math.max(0, (s / durationSec) * 100);
           const width = Math.max(0.5, Math.min(100 - left, ((e_ - s) / durationSec) * 100));
           const isDragging = drag?.idx === idx;
@@ -269,11 +284,26 @@ export function WaveformStrip({
               className={`group absolute inset-y-1 rounded-md border transition-colors ${
                 isDragging
                   ? "z-20 cursor-ew-resize border-brand bg-brand/40 shadow-sm"
-                  : "cursor-grab border-brand/50 bg-brand/25 hover:bg-brand/35"
+                  : overlapping
+                    ? "cursor-grab border-amber-500/80 bg-amber-400/30 hover:bg-amber-400/40"
+                    : "cursor-grab border-brand/50 bg-brand/25 hover:bg-brand/35"
               }`}
               style={{ left: `${left}%`, width: `${width}%` }}
-              title={`第 ${idx + 1} 句（拖动边缘调时间，拖动中间平移）`}
+              title={
+                overlapping
+                  ? `第 ${idx + 1} 句（与其他句时间重叠，播放时会同显）`
+                  : `第 ${idx + 1} 句（拖动边缘调时间，拖动中间平移）`
+              }
             >
+              {/* 句文字（剪辑软件字幕轨样式：截断展示、不拦截拖拽；块太窄自然裁掉） */}
+              {seg.text && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-2.5 text-[10px] leading-tight text-neutral-800"
+                >
+                  <span className="truncate">{seg.text}</span>
+                </span>
+              )}
               {/* 左右拖拽手柄（视觉提示：hover 时边缘竖条加深） */}
               <span
                 aria-hidden
