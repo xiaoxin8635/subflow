@@ -9,6 +9,8 @@
  *              数据源：GET /api/projects/[id]/translations（列表，含状态），
  *              存在进行中任务时每 3 秒轮询；发起 POST 创建任务。
  *              客户端额度估算仅作展示，实际以服务端下单时字数为准。
+ *              批次①起渲染于编辑器顶部「字幕翻译」按钮唤起的抽屉内
+ *              （ToolDrawer 标题栏已含名称，卡片内不再重复大标题）。
  */
 import { useCallback, useEffect, useState } from "react";
 import { TRANSLATE_LANGUAGES, TRANSLATE_STYLES, translateCostSeconds } from "@/lib/constants";
@@ -107,11 +109,8 @@ export function TranslateCard({
   const chipIdle = "border-black/10 text-neutral-600 hover:border-black/20";
 
   return (
-    <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-semibold">🌐 字幕翻译</h2>
-        <p className="text-xs text-neutral-400">按源字幕字数计费：每 1000 字 60 秒额度，最低 60 秒</p>
-      </div>
+    <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+      <p className="text-xs text-neutral-400">按源字幕字数计费：每 1000 字 60 秒额度，最低 60 秒</p>
       <p className="mt-1 text-sm text-neutral-500">
         将整份字幕翻译为目标语言，生成新的字幕文件（时间轴与原文逐行对齐）。
       </p>

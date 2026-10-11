@@ -3,7 +3,7 @@
  * @file 项目实时视图（客户端轮询组件）
  * @description 接收服务端首屏数据，项目处于中间态（UPLOADED/TRANSCRIBING/POLISHING）时
  *              每 3 秒轮询 GET /api/projects/[id]，直至 READY/FAILED。
- *              READY 渲染字幕编辑器（视频预览 + 逐行编辑 + 样式切换）。
+ *              READY 渲染字幕编辑器（批次①：翻译/导出收进编辑器顶部按钮唤起的抽屉）。
  */
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@prisma/client";
@@ -16,7 +16,6 @@ import {
 } from "@/lib/browser-notify";
 import { SubtitleEditor } from "./subtitle-editor";
 import type { EditorSegment } from "./subtitle-editor";
-import { TranslateCard } from "./translate-card";
 
 /** 详情接口返回的项目结构（与 /api/projects/[id] GET 响应一致） */
 export interface ProjectDetail {
@@ -194,30 +193,21 @@ export function ProjectLiveView({
         </div>
       )}
 
-      {/* 字幕编辑器 + 翻译卡（READY） */}
+      {/* 字幕编辑器（READY；翻译/导出在编辑器顶部按钮唤起的抽屉内） */}
       {project.status === "READY" &&
         (segments.length === 0 ? (
           <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
             <p className="text-sm text-neutral-500">未识别到字幕内容</p>
           </div>
         ) : (
-          <>
-            <SubtitleEditor
-              projectId={projectId}
-              projectTitle={project.title}
-              initialSegments={segments}
-              durationSec={project.durationSec ?? 0}
-              mediaKind={project.mediaKind ?? "video"}
-              waveformKey={project.waveformKey ?? null}
-            />
-            {/* 翻译卡：预估字数取当前源字幕总字符数（次要工具，收窄与列表页卡片同级） */}
-            <div className="mx-auto max-w-3xl">
-              <TranslateCard
-                projectId={projectId}
-                charCount={segments.reduce((n, s) => n + s.text.length, 0)}
-              />
-            </div>
-          </>
+          <SubtitleEditor
+            projectId={projectId}
+            projectTitle={project.title}
+            initialSegments={segments}
+            durationSec={project.durationSec ?? 0}
+            mediaKind={project.mediaKind ?? "video"}
+            waveformKey={project.waveformKey ?? null}
+          />
         ))}
     </div>
   );

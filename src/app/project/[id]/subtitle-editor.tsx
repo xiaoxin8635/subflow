@@ -1,7 +1,9 @@
 "use client";
 /**
  * @file 字幕编辑器（客户端组件）
- * @description 布局：左侧视频预览（叠加当前行字幕，样式实时可切换/微调），右侧分段列表。
+ * @description 布局（批次①信息架构重排）：顶部动作条（字幕翻译 / 导出成片 → 抽屉）+
+ *   左列视频预览（叠加当前行字幕，样式折叠条内切换/微调）+ 右列剪辑主舞台
+ *   （工具条一行收纳全部操作，窄屏横向滚动不折行 → 波形 → 分段列表占满剩余高度）。
  *   能力：点击行跳转播放、播放中自动高亮/滚动当前行、逐行编辑文本与时间、
  *         删除行、上方插入行、时间轴批量调整（整体偏移/整体伸缩 + 撤销）、
  *         查找替换（批量修正错别字/统一术语，与时间轴共用撤销快照）、
@@ -11,7 +13,8 @@
  *         选择官方样式模板、样式微调（字体/字号/位置/边距/字色/
  *         描边/高亮）、另存为我的模板、删除我的模板、保存（PUT 全量 segments）、
  *         双语预览（存在已完成翻译时：原文/译文/双语叠加切换，仅影响预览不改数据）、
- *         导出成片（ExportCard：携带当前预览样式快照烧录，所见即所得 + 额度扣减 + 下载）。
+ *         导出成片与字幕翻译收进右侧抽屉（ToolDrawer：ExportCard 携带当前预览样式
+ *         快照烧录所见即所得；TranslateCard 发起翻译与管理翻译任务）。
  *   依赖 API：GET /api/projects/[id]/video、PUT /api/projects/[id]/transcript、
  *             GET /api/styles、GET/POST /api/user-styles、DELETE /api/user-styles/[id]、
  *             POST /api/projects/[id]/exports、GET /api/exports/[id]、
@@ -23,6 +26,8 @@ import { parseStyleConfig } from "@/lib/style-config";
 import type { StyleConfig } from "@/lib/style-config";
 import { TRANSLATE_LANGUAGES } from "@/lib/constants";
 import { ExportCard } from "./export-card";
+import { TranslateCard } from "./translate-card";
+import { ToolDrawer } from "./tool-drawer";
 import { WaveformStrip } from "./waveform-strip";
 
 /** 编辑器使用的分段结构（keywords 由后端保证存在） */
@@ -122,6 +127,10 @@ export function SubtitleEditor({
   const [bundleBusy, setBundleBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err" | "warn"; text: string } | null>(null);
   const [containerH, setContainerH] = useState(0);
+  // 抽屉（批次①重排）：翻译 / 导出成片收进右侧抽屉，主界面聚焦剪辑
+  const [drawer, setDrawer] = useState<null | "translate" | "export">(null);
+  // 字幕样式折叠条（批次①重排）：默认收起只显示一行，展开才见模板与微调
+  const [styleOpen, setStyleOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoBoxRef = useRef<HTMLDivElement>(null);
@@ -543,8 +552,30 @@ export function SubtitleEditor({
     }
   }
 
+  // 当前生效样式名（样式折叠条展示 + 导出抽屉 props 共用；无匹配 = 系统默认）
+  const activeStyleName =
+    [...styles, ...userStyles].find((s) => s.id === activeStyleId)?.name ?? null;
+
   return (
     <div className="mt-4 lg:grid lg:grid-cols-[5fr_4fr] lg:gap-6">
+      {/* ============ 顶部动作条（批次①）：翻译 / 导出成片收进抽屉，主界面聚焦剪辑 ============ */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2 lg:col-span-2 lg:mb-0">
+        <button
+          type="button"
+          onClick={() => setDrawer("translate")}
+          className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-brand hover:text-brand"
+        >
+          字幕翻译
+        </button>
+        <button
+          type="button"
+          onClick={() => setDrawer("export")}
+          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+        >
+          导出成片
+        </button>
+      </div>
+
       {/* ============ 左：视频预览 ============ */}
       <div>
         <div ref={videoBoxRef} className="relative overflow-hidden rounded-2xl bg-black shadow-sm">
@@ -612,9 +643,30 @@ export function SubtitleEditor({
           </div>
         )}
 
-        {/* 样式切换 + 微调 + 我的模板 */}
-        <div className="mt-4 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium">字幕样式</p>
+        {/* 字幕样式（批次①折叠条）：收起只显示当前模板一行，展开为完整样式面板 */}
+        <div
+          className={`mt-4 rounded-2xl border border-black/5 bg-white px-4 shadow-sm ${
+            styleOpen ? "pb-4" : ""
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setStyleOpen((v) => !v)}
+            aria-expanded={styleOpen}
+            className="flex w-full items-center justify-between gap-3 py-3 text-left"
+          >
+            <span className="text-sm font-medium">字幕样式</span>
+            <span className="flex items-center gap-2 text-xs text-neutral-400">
+              <span>当前：{activeStyleName ?? "系统默认"}</span>
+              <span
+                aria-hidden
+                className={`transition-transform ${styleOpen ? "rotate-180" : ""}`}
+              >
+                ▾
+              </span>
+            </span>
+          </button>
+          {styleOpen && (
           <div className="mt-3 flex flex-wrap gap-2">
             {styles.map((s) => (
               <button
@@ -633,8 +685,9 @@ export function SubtitleEditor({
               <span className="text-sm text-neutral-400">暂无官方样式模板</span>
             )}
           </div>
+          )}
 
-          {userStyles.length > 0 && (
+          {styleOpen && userStyles.length > 0 && (
             <div className="mt-3">
               <p className="text-xs font-medium text-neutral-500">我的模板</p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -675,12 +728,14 @@ export function SubtitleEditor({
             </div>
           )}
 
-          <p className="mt-2 text-xs text-neutral-400">
-            切换后立即在左侧预览，导出按当前预览效果烧录（微调未保存为模板也生效）
-          </p>
+          {styleOpen && (
+            <p className="mt-2 text-xs text-neutral-400">
+              切换后立即在左侧预览，导出按当前预览效果烧录（微调未保存为模板也生效）
+            </p>
+          )}
 
           {/* 样式微调面板（调整只影响本地预览与导出快照，不改模板库内配置） */}
-          {activeStyle && (
+          {styleOpen && activeStyle && (
             <div className="mt-3 border-t border-neutral-100 pt-3">
               <button
                 type="button"
@@ -867,79 +922,79 @@ export function SubtitleEditor({
             </div>
           )}
         </div>
-
-        {/* 导出卡片（按当前预览样式快照烧录，完成后可下载；音频项目仅字幕下载） */}
-        <ExportCard
-          projectId={projectId}
-          projectTitle={projectTitle}
-          durationSec={durationSec}
-          styleId={activeStyleId}
-          styleName={
-            [...styles, ...userStyles].find((s) => s.id === activeStyleId)?.name ?? null
-          }
-          styleSource={styleSource}
-          styleConfig={activeStyle}
-          assQuery={
-            activeStyleId
-              ? styleSource === "user"
-                ? `userStyleId=${activeStyleId}`
-                : `styleId=${activeStyleId}`
-              : ""
-          }
-          dirty={dirty}
-          mediaKind={mediaKind}
-          getCurrentTime={() => videoRef.current?.currentTime ?? 0}
-        />
       </div>
 
-      {/* ============ 右：分段列表 ============ */}
-      <div className="mt-6 lg:mt-0">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-neutral-500">
-            共 {segments.length} 段 · 点击行跳转播放
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => downloadScript(false)}
-              title="逐句一行的纯文本文稿，可直接用于公众号 / 笔记"
-              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
-            >
-              文稿TXT
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadScript(true)}
-              title="带时间戳的 Markdown 文稿（**mm:ss** 句文本）"
-              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
-            >
-              文稿MD
-            </button>
-            <button
-              type="button"
-              onClick={() => void downloadBundle()}
-              disabled={bundleBusy}
-              title="打包下载全部字幕产物（原文三格式 + 文稿 + 已完成翻译与双语）"
-              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {bundleBusy ? "打包中…" : "打包下载"}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !dirty}
-              className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
-            </button>
-          </div>
+      {/* ============ 右：剪辑主舞台（批次①：工具条一行收纳全部操作，窄屏横向滚动不折行） ============ */}
+      <div className="mt-6 flex flex-col lg:mt-0">
+        {/* 工具条：时间轴/查找为面板开关（开启高亮）；文稿/打包/保存为动作。flex-nowrap 窄屏横向滚动不折行 */}
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
+          <span className="mr-auto shrink-0 whitespace-nowrap pr-2 text-sm text-neutral-500">
+            共 {segments.length} 段
+          </span>
+          <button
+            type="button"
+            onClick={() => setTlOpen((v) => !v)}
+            title="字幕整体与语音不同步时批量偏移/伸缩"
+            className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+              tlOpen
+                ? "border-brand bg-brand-soft text-brand"
+                : "border-black/10 text-neutral-600 hover:border-brand hover:text-brand"
+            }`}
+          >
+            时间轴
+          </button>
+          <button
+            type="button"
+            onClick={() => setFindOpen((v) => !v)}
+            title="批量修正错别字 / 统一术语写法"
+            className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+              findOpen
+                ? "border-brand bg-brand-soft text-brand"
+                : "border-black/10 text-neutral-600 hover:border-brand hover:text-brand"
+            }`}
+          >
+            查找替换
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadScript(false)}
+            title="逐句一行的纯文本文稿，可直接用于公众号 / 笔记"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+          >
+            文稿TXT
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadScript(true)}
+            title="带时间戳的 Markdown 文稿（**mm:ss** 句文本）"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
+          >
+            文稿MD
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadBundle()}
+            disabled={bundleBusy}
+            title="打包下载全部字幕产物（原文三格式 + 文稿 + 已完成翻译与双语）"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {bundleBusy ? "打包中…" : "打包"}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !dirty}
+            className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
+          </button>
         </div>
-        <p className="mt-1 text-xs text-neutral-400">
-          快捷键：空格 播放/暂停 · ← → 快退/快进 2 秒 · Ctrl+S 保存
+        <p className="mt-1 shrink-0 text-xs text-neutral-400">
+          点击行跳转播放 · 空格 播放/暂停 · ← → 快退/快进 2 秒 · Ctrl+S 保存
         </p>
 
         {/* 音频波形时间轴（转写时旁路生成；旧项目/提取失败时不渲染，退化为行内轨道条） */}
         {waveformKey && durationSec > 0 && (
-          <div className="mt-3">
+          <div className="mt-3 shrink-0">
             <WaveformStrip
               projectId={projectId}
               durationSec={durationSec}
@@ -951,17 +1006,10 @@ export function SubtitleEditor({
           </div>
         )}
 
-        {/* 时间轴批量调整（整体与语音不同步时使用；纯前端计算，保存走统一 PUT） */}
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => setTlOpen((v) => !v)}
-            className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
-          >
-            {tlOpen ? "收起时间轴工具 ▲" : "时间轴批量调整 ▼"}
-          </button>
+        {/* 时间轴批量调整面板（开关在工具条「时间轴」；整体与语音不同步时使用；纯前端计算，保存走统一 PUT） */}
+        <div className="mt-2 shrink-0">
           {tlOpen && (
-            <div className="mt-2 space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
+            <div className="space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
               <p className="text-xs text-neutral-400">
                 字幕整体与语音不同步时使用；调整只改本地预览，需点「保存修改」后导出才生效
               </p>
@@ -1018,17 +1066,10 @@ export function SubtitleEditor({
           )}
         </div>
 
-        {/* 查找替换（P2.11）：批量修正错别字 / 统一术语写法；纯前端替换，保存走统一 PUT */}
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => setFindOpen((v) => !v)}
-            className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
-          >
-            {findOpen ? "收起查找替换 ▲" : "查找替换 ▼"}
-          </button>
+        {/* 查找替换面板（开关在工具条「查找替换」；批量修正错别字 / 统一术语写法；纯前端替换，保存走统一 PUT） */}
+        <div className="mt-2 shrink-0">
           {findOpen && (
-            <div className="mt-2 space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
+            <div className="space-y-2 rounded-xl border border-neutral-100 bg-white p-3">
               <p className="text-xs text-neutral-400">
                 批量修正错别字或统一术语写法；替换只改本地预览，需点「保存修改」后才对导出生效
               </p>
@@ -1082,7 +1123,10 @@ export function SubtitleEditor({
           </p>
         )}
 
-        <ol ref={listRef} className="mt-3 max-h-[70vh] space-y-2 overflow-y-auto pr-1">
+        <ol
+          ref={listRef}
+          className="mt-3 max-h-[70vh] min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none"
+        >
           {segments.map((seg, idx) => {
             const isActive = idx === activeIdx;
             const isEditing = idx === editingIdx;
@@ -1198,6 +1242,41 @@ export function SubtitleEditor({
           })}
         </ol>
       </div>
+
+      {/* ============ 工具抽屉（批次①）：字幕翻译 / 导出成片（条件挂载，关闭即卸载） ============ */}
+      {drawer && (
+        <ToolDrawer
+          title={drawer === "translate" ? "字幕翻译" : "导出成片"}
+          onClose={() => setDrawer(null)}
+        >
+          {drawer === "translate" ? (
+            <TranslateCard
+              projectId={projectId}
+              charCount={segments.reduce((n, s) => n + s.text.length, 0)}
+            />
+          ) : (
+            <ExportCard
+              projectId={projectId}
+              projectTitle={projectTitle}
+              durationSec={durationSec}
+              styleId={activeStyleId}
+              styleName={activeStyleName}
+              styleSource={styleSource}
+              styleConfig={activeStyle}
+              assQuery={
+                activeStyleId
+                  ? styleSource === "user"
+                    ? `userStyleId=${activeStyleId}`
+                    : `styleId=${activeStyleId}`
+                  : ""
+              }
+              dirty={dirty}
+              mediaKind={mediaKind}
+              getCurrentTime={() => videoRef.current?.currentTime ?? 0}
+            />
+          )}
+        </ToolDrawer>
+      )}
     </div>
   );
 }

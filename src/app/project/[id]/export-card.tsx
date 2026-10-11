@@ -11,6 +11,8 @@
  *              音频项目：无烧录语义，提供片段裁剪导出（输出 mp3，按片段时长计费）
  *              与字幕文件下载。
  *              余额不足（402）时引导去兑换页。字幕有未保存修改时禁止导出（导出读取库内数据）。
+ *              批次①起渲染于编辑器顶部「导出成片」按钮唤起的抽屉内
+ *              （ToolDrawer 标题栏已含名称，视频分支卡内不再重复标题）。
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -332,7 +334,7 @@ export function ExportCard({
   );
 
   return (
-    <div className="mt-4 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
       {mediaKind === "audio" ? (
         /* 纯音频项目：无烧录语义，提供片段裁剪导出（纯裁剪输出 mp3） */
         <div>
@@ -377,7 +379,6 @@ export function ExportCard({
       <div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">导出成片</p>
             <p className="mt-0.5 text-xs text-neutral-400">
               按所选样式（{styleName ?? "未选择"}）烧录字幕 · 预计消耗 {costSeconds} 秒额度
               {balance != null && <> · 当前余额 {formatSeconds(balance)}</>}

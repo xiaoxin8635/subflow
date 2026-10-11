@@ -354,6 +354,78 @@ export function NewUploadClient() {
           支持一次选择多个视频/音频批量上传（mp4 / mov / mkv / webm / mp3 / m4a / wav，单个最大 500MB；分片上传，中断可续传）
         </p>
 
+        {/* 拖放/点击选择区域（批次①动线：先选文件，处理方式与识别设置放在下方） */}
+        <label
+          className="mt-6 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-white px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-brand-soft/40"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept="video/mp4,video/quicktime,video/x-matroska,video/webm,audio/mpeg,audio/mp4,audio/wav"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) addFiles(Array.from(e.target.files));
+              e.target.value = ""; // 允许重复选择同一文件
+            }}
+            disabled={uploading}
+          />
+          <div className="text-4xl">📹</div>
+          <p className="mt-3 font-medium">点击选择 或 拖拽视频/音频到这里（可多选）</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            视频 mp4 / mov / mkv / webm · 音频 mp3 / m4a / wav · 单个 ≤ 500MB · 每批 ≤ {MAX_BATCH_FILES} 个
+          </p>
+        </label>
+
+        {/* 文件列表 */}
+        {rows.length > 0 && (
+          <ul className="mt-6 space-y-2">
+            {rows.map((r) => {
+              const bad = !ACCEPT_TYPES[extOf(r.file)];
+              const tooBig = oversize(r);
+              return (
+                <li key={r.id} className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{r.file.name}</p>
+                      <p className={`mt-0.5 text-xs ${bad || tooBig ? "text-red-500" : "text-neutral-400"}`}>
+                        {formatBytes(r.file.size)}
+                        {bad && " · 不支持的格式"}
+                        {tooBig && " · 超过大小上限"}
+                        {r.error && ` · ${r.error}`}
+                        {r.status === "done" && " · 上传完成，转写已排队"}
+                      </p>
+                    </div>
+                    {r.status === "uploading" ? (
+                      <span className="shrink-0 text-xs text-neutral-500">{r.progress}%</span>
+                    ) : (
+                      (r.status === "pending" || r.status === "failed" || r.status === "canceled") && (
+                        <button
+                          type="button"
+                          onClick={() => removeRow(r.id)}
+                          className="shrink-0 text-xs text-neutral-400 transition-colors hover:text-red-500"
+                        >
+                          移除
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {r.status === "uploading" && (
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                      <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${r.progress}%` }} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
         {/* 处理模式：语音转写（默认）/ OCR 硬字幕提取（仅视频，音频恒走语音转写） */}
         <fieldset className="mt-6" disabled={uploading}>
           <legend className="text-sm font-medium">处理方式</legend>
@@ -487,78 +559,6 @@ export function NewUploadClient() {
             </label>
           )}
         </fieldset>
-
-        {/* 拖放/点击选择区域 */}
-        <label
-          className="mt-8 flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 bg-white px-6 py-8 text-center transition-colors hover:border-brand/50 hover:bg-brand-soft/40"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
-          }}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            accept="video/mp4,video/quicktime,video/x-matroska,video/webm,audio/mpeg,audio/mp4,audio/wav"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files?.length) addFiles(Array.from(e.target.files));
-              e.target.value = ""; // 允许重复选择同一文件
-            }}
-            disabled={uploading}
-          />
-          <div className="text-4xl">📹</div>
-          <p className="mt-3 font-medium">点击选择 或 拖拽视频/音频到这里（可多选）</p>
-          <p className="mt-1 text-sm text-neutral-500">
-            视频 mp4 / mov / mkv / webm · 音频 mp3 / m4a / wav · 单个 ≤ 500MB · 每批 ≤ {MAX_BATCH_FILES} 个
-          </p>
-        </label>
-
-        {/* 文件列表 */}
-        {rows.length > 0 && (
-          <ul className="mt-6 space-y-2">
-            {rows.map((r) => {
-              const bad = !ACCEPT_TYPES[extOf(r.file)];
-              const tooBig = oversize(r);
-              return (
-                <li key={r.id} className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{r.file.name}</p>
-                      <p className={`mt-0.5 text-xs ${bad || tooBig ? "text-red-500" : "text-neutral-400"}`}>
-                        {formatBytes(r.file.size)}
-                        {bad && " · 不支持的格式"}
-                        {tooBig && " · 超过大小上限"}
-                        {r.error && ` · ${r.error}`}
-                        {r.status === "done" && " · 上传完成，转写已排队"}
-                      </p>
-                    </div>
-                    {r.status === "uploading" ? (
-                      <span className="shrink-0 text-xs text-neutral-500">{r.progress}%</span>
-                    ) : (
-                      (r.status === "pending" || r.status === "failed" || r.status === "canceled") && (
-                        <button
-                          type="button"
-                          onClick={() => removeRow(r.id)}
-                          className="shrink-0 text-xs text-neutral-400 transition-colors hover:text-red-500"
-                        >
-                          移除
-                        </button>
-                      )
-                    )}
-                  </div>
-                  {r.status === "uploading" && (
-                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
-                      <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${r.progress}%` }} />
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
 
         {/* 批量结果汇总 */}
         {summary && <p className="mt-4 text-center text-sm text-amber-600">{summary}</p>}
