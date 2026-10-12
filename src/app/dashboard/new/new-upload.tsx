@@ -184,6 +184,27 @@ function ChevronIcon({ open }: { open: boolean }) {
   );
 }
 
+/** 场景图标（识别设置场景 chips：随文字色继承，stroke 1.7 线性风格） */
+function SceneIcon({ code }: { code: string }) {
+  const paths: Record<string, string[]> = {
+    // 通用 = 话筒（日常口播/vlog/访谈）
+    general: ["M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z", "M19 10v1a7 7 0 0 1-14 0v-1", "M12 18v4"],
+    // 技术讲解 = 烧杯（编程/软件教程）
+    tech: ["M10 2v6l-5.3 9.1A2 2 0 0 0 6.4 20h11.2a2 2 0 0 0 1.7-2.9L14 8V2", "M8 15h8"],
+    // 直播带货 = 购物袋（商品/价格口播）
+    live: ["M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z", "M3 6h18", "M16 10a4 4 0 0 1-8 0"],
+    // 课堂讲课 = 学士帽（知识讲授/课程录屏）
+    course: ["M22 10 12 5 2 10l10 5 10-5Z", "M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"],
+  };
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+      {(paths[code] ?? paths.general).map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
 /** 字节数格式化为可读大小 */
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
@@ -462,16 +483,19 @@ export function NewUploadClient() {
     abortRef.current?.abort();
   }
 
+  /** 热词实时计数（逗号/中文逗号分隔，去空段；与摘要、输入框 N/50 同一口径） */
+  const hotwordCount = hotwords.split(/[,，]/).filter((w) => w.trim()).length;
+
   /** 识别设置折叠条收起时的摘要文案（编码当前值，展开才见表单） */
   function settingsSummary(): string {
     if (processMode === "ocr") {
-      const hw = hotwords.trim() ? `热词 ${hotwords.split(/[,，]/).filter(Boolean).length} 个` : "未设热词";
+      const hw = hotwordCount > 0 ? `热词 ${hotwordCount} 个` : "未设热词";
       return `提取画面字幕 · ${hw}`;
     }
     const sceneLabel = ASR_SCENES.find((s) => s.code === scene)?.label ?? "通用";
     const langLabel = ASR_LANGUAGES.find((l) => l.code === language)?.label ?? "中文（普通话）";
     const parts: string[] = [sceneLabel, langLabel];
-    if (hotwords.trim()) parts.push(`热词 ${hotwords.split(/[,，]/).filter(Boolean).length} 个`);
+    if (hotwordCount > 0) parts.push(`热词 ${hotwordCount} 个`);
     if (denoise) parts.push("降噪");
     return parts.join(" · ");
   }
@@ -729,12 +753,12 @@ export function NewUploadClient() {
           <div className="rise-in mt-3 rounded-xl border border-neutral-200 bg-white p-4">
             {processMode === "asr" && (
               <>
-                {/* 场景预设 chips：选中哪档，下方一行显示该档说明（固定高防跳动） */}
+                {/* 场景预设 chips：图标 + 文字（选中哪档，下方一行显示该档说明，固定高防跳动） */}
                 <div className="flex flex-wrap gap-2">
                   {ASR_SCENES.map((s) => (
                     <label
                       key={s.code}
-                      className={`cursor-pointer rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-3 pr-3.5 text-sm transition-colors ${
                         scene === s.code
                           ? "border-brand bg-brand-soft font-medium text-brand"
                           : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50"
@@ -748,6 +772,9 @@ export function NewUploadClient() {
                         checked={scene === s.code}
                         onChange={() => setScene(s.code)}
                       />
+                      <span aria-hidden className={scene === s.code ? "" : "text-neutral-400"}>
+                        <SceneIcon code={s.code} />
+                      </span>
                       {s.label}
                     </label>
                   ))}
@@ -756,29 +783,40 @@ export function NewUploadClient() {
                   {ASR_SCENES.find((s) => s.code === scene)?.hint}
                 </p>
 
-                <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-4">
+                {/* 语言 + 噪声抑制两列（桌面并排缩短表单纵向长度；窄屏自动堆叠） */}
+                <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
                   <label className="block">
                     <span className="text-sm font-medium">视频主要语言</span>
-                    <select
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value)}
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:w-64"
-                    >
-                      {ASR_LANGUAGES.map((l) => (
-                        <option key={l.code} value={l.code}>
-                          {l.label}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="relative mt-2 block">
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-neutral-200 bg-white py-2.5 pl-3 pr-9 text-sm shadow-[0_1.5px_0_0_#e5e5e5] transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                      >
+                        {ASR_LANGUAGES.map((l) => (
+                          <option key={l.code} value={l.code}>
+                            {l.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span aria-hidden className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                        <ChevronIcon open={false} />
+                      </span>
+                    </span>
                   </label>
 
-                  <label className="flex cursor-pointer items-start gap-2.5 pb-1">
-                    <input
-                      type="checkbox"
-                      checked={denoise}
-                      onChange={(e) => setDenoise(e.target.checked)}
-                      className="mt-0.5 size-4 accent-[var(--color-brand)]"
-                    />
+                  <label className="flex cursor-pointer items-start gap-3 sm:pt-7">
+                    <span className="relative mt-0.5 inline-flex shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={denoise}
+                        onChange={(e) => setDenoise(e.target.checked)}
+                        className="peer sr-only"
+                      />
+                      {/* switch 轨道 + 圆点（纯 CSS peer 状态；表单语义仍是 checkbox） */}
+                      <span aria-hidden className="h-6 w-10 rounded-full bg-neutral-200 transition-colors peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30" />
+                      <span aria-hidden className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-150 peer-checked:translate-x-4" />
+                    </span>
                     <span>
                       <span className="text-sm font-medium">噪声抑制</span>
                       <span className="mt-0.5 block text-xs text-neutral-400">
@@ -794,7 +832,12 @@ export function NewUploadClient() {
             )}
 
             <label className={`${processMode === "asr" ? "mt-5" : ""} block`}>
-              <span className="text-sm font-medium">专有名词热词</span>
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium">专有名词热词</span>
+                {hotwordCount > 0 && (
+                  <span className="text-xs tabular-nums text-neutral-400">{hotwordCount} / 50</span>
+                )}
+              </span>
               <input
                 type="text"
                 value={hotwords}
