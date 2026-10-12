@@ -117,6 +117,12 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       chips + 下方动态 hint 行；「识别设置」收成折叠条（收起显示当前值摘要
       如「通用 · 中文（普通话）」，上传中禁改）；上传按钮内衬批量整体进度条；
       新增 `rise-in`/`pop-in` 微动效（尊重 prefers-reduced-motion）
+- [x] **P2.20 工作台统计条与筛选 tabs 精修**：[page.tsx](src/app/dashboard/page.tsx) + [filter-tabs.tsx](src/components/filter-tabs.tsx) + [format.ts](src/lib/format.ts)
+      工作台顶部可读性打磨（结构零改动）——`formatSecondsLabel` 秒分支
+      四舍五入取整（累计转写 21.993 秒这类浮点尾差不再外露，惠及全部调用点）；
+      「剩余额度 · 兑换」去 middle-dot 串接，「兑换」改品牌软底小胶囊
+      （hover 翻实底——动作长得像动作）；FilterTabs 计数数字改小胶囊徽章
+      三态（选中项品牌软底 / 有计数灰底 / 零计数弱化淡灰），滑动指示条不变
 - [x] **P2.19 侧边栏导航花哨化**：[app-shell.tsx](src/components/app-shell.tsx)
       深色侧边栏视觉升级（结构与服务端组件形态零改动）——5 个导航项各带
       stroke SVG 线性图标（胶片格/＋/用户＋/票券/闪电，多段 path 合一 d）；
