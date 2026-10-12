@@ -124,7 +124,7 @@ export function AppShell({ active, phone, balanceSeconds, children }: AppShellPr
               </p>
               <div className="mt-1 flex items-center justify-between text-xs">
                 <span className="text-neutral-500">{maskPhone(phone)}</span>
-                <NotificationBell variant="dark" />
+                <NotificationBell variant="dark" placement="bottom" />
               </div>
             </div>
             <LogoutButton />

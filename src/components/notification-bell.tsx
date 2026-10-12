@@ -5,9 +5,10 @@
  * @description 客户端组件：60 秒轮询 GET /api/notifications 展示未读红点，
  *              点击打开下拉列表（最近 30 条），点条目标记已读并跳转 link，
  *              支持「全部已读」。tab 可见时立即刷新一次（回页即见最新）。
- *              挂载点：AppShell 侧边栏（variant="dark"，铃铛贴近视口底部，
- *              面板向上弹出）与 project 详情页顶栏（默认浅色，面板向下弹出），
- *              两种宿主配色与弹出方向由 variant 区分。
+ *              挂载点：桌面侧边栏（variant="dark" + placement="bottom"，铃铛
+ *              贴近视口右下角，面板向上且左缘对齐弹出）、移动端顶栏
+ *              （variant="dark"，向下弹）与 project 详情页顶栏（默认浅色，
+ *              向下弹），宿主配色由 variant 区分、弹出方位由 placement 区分。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -56,10 +57,28 @@ function timeAgo(iso: string): string {
 }
 
 /**
+ * 下拉面板弹出位置：
+ * - "top"（默认）：面板在铃铛下方，右缘对齐（移动端顶栏 / 详情页顶栏）
+ * - "bottom"：面板在铃铛上方，左缘对齐（桌面侧边栏——铃铛贴近视口右下角，
+ *   右缘对齐会让 320px 面板向左伸出屏幕外被截断，改左缘对齐向右展开）
+ */
+const PANEL_PLACEMENT = {
+  top: "top-11 right-0",
+  bottom: "bottom-full mb-2 left-0",
+} as const;
+
+/**
  * 铃铛组件入口
  * @param variant 宿主配色：light 浅色顶栏（默认）/ dark 深色侧边栏
+ * @param placement 弹出方位："top" 铃铛下方右对齐（默认）/ "bottom" 铃铛上方左对齐
  */
-export function NotificationBell({ variant = "light" }: { variant?: "light" | "dark" }) {
+export function NotificationBell({
+  variant = "light",
+  placement = "top",
+}: {
+  variant?: "light" | "dark";
+  placement?: keyof typeof PANEL_PLACEMENT;
+}) {
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -165,12 +184,10 @@ export function NotificationBell({ variant = "light" }: { variant?: "light" | "d
         )}
       </button>
 
-      {/* 下拉面板：侧边栏宿主（铃铛贴近视口底部）向上弹，顶栏宿主向下弹 */}
+      {/* 下拉面板：弹出方位由 placement 决定（见 PANEL_PLACEMENT 说明） */}
       {open && (
         <div
-          className={`absolute right-0 z-50 w-80 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-lg ${
-            variant === "dark" ? "bottom-full mb-2" : "top-11"
-          }`}
+          className={`absolute z-50 w-80 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-lg ${PANEL_PLACEMENT[placement]}`}
         >
           <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
             <span className="text-sm font-medium">通知</span>
@@ -186,7 +203,7 @@ export function NotificationBell({ variant = "light" }: { variant?: "light" | "d
               <p className="mt-2 text-sm text-neutral-400">暂无通知</p>
             </div>
           ) : (
-            <ul className="max-h-80 overflow-y-auto">
+            <ul className="max-h-[60vh] overflow-y-auto">
               {items.map((item) => {
                 const meta = TYPE_META[item.type] ?? { icon: "🔔", tone: "text-neutral-600" };
                 return (
