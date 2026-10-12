@@ -117,6 +117,15 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       chips + 下方动态 hint 行；「识别设置」收成折叠条（收起显示当前值摘要
       如「通用 · 中文（普通话）」，上传中禁改）；上传按钮内衬批量整体进度条；
       新增 `rise-in`/`pop-in` 微动效（尊重 prefers-reduced-motion）
+- [x] **P2.19 侧边栏导航花哨化**：[app-shell.tsx](src/components/app-shell.tsx)
+      深色侧边栏视觉升级（结构与服务端组件形态零改动）——5 个导航项各带
+      stroke SVG 线性图标（胶片格/＋/用户＋/票券/闪电，多段 path 合一 d）；
+      当前项改品牌渐变底（`from-brand/25 to-brand/5`）+ 左缘发光指示条
+      （brand 竖条 + 品牌色光晕阴影）、图标亮靛蓝、其余项图标 hover 微移
+      变亮；SF Logo 改靛蓝渐变方块 + 品牌辉光；侧栏顶部淡靛蓝光晕
+      （radial-gradient + isolate/-z-10 stacking，光在面板底之上、内容之下）；
+      额度卡高光描边 + 余额数字白→灰渐变；移动端标签栏同步加图标、当前项
+      `bg-brand/20` 软底
 - [x] **P2.18 识别设置面板精修**：[new-upload.tsx](src/app/dashboard/new/new-upload.tsx)
       表单控件与整体键帽/实体键体系统一（交互逻辑零改动）——场景四档 chips
       加 stroke SVG 图标（话筒/烧杯/购物袋/学士帽，未选中态图标淡灰）；语言
