@@ -61,34 +61,55 @@ export default async function PricingPage() {
           按转写时长付费，付款后客服发放激活码，兑换即时到账
         </p>
 
-        {/* 套餐卡片 */}
+        {/* 套餐卡片：三档时中间档为推荐位（与加油包「最受欢迎」同语言） */}
         <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {plans.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-2xl border border-black/5 bg-white p-8 shadow-sm"
-            >
-              <h2 className="font-semibold">{p.name}</h2>
-              {p.description && (
-                <p className="mt-1 text-sm text-neutral-500">{p.description}</p>
-              )}
-              <p className="mt-4">
-                <span className="text-4xl font-bold">¥{yuan(p.priceCents)}</span>
-                <span className="text-neutral-500"> /月</span>
-              </p>
-              <ul className="mt-6 space-y-2 text-sm text-neutral-600">
-                <li className="flex items-center gap-2">
-                  <span className="text-brand">✓</span>每月 {formatSeconds(p.monthlySeconds)} 转写额度
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-brand">✓</span>AI 润色 + 关键词高亮
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-brand">✓</span>高清成片导出
-                </li>
-              </ul>
-            </div>
-          ))}
+          {plans.map((p, i) => {
+            const featured = plans.length === 3 && i === 1;
+            return (
+              <div
+                key={p.id}
+                className={`relative rounded-2xl border bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                  featured ? "border-brand/40 ring-1 ring-brand/20" : "border-black/5"
+                }`}
+              >
+                {featured && (
+                  <span className="absolute -top-3 left-6 rounded-full bg-brand px-3 py-0.5 text-xs font-medium text-white">
+                    最受欢迎
+                  </span>
+                )}
+                <h2 className="font-semibold">{p.name}</h2>
+                {p.description && (
+                  <p className="mt-1 text-sm text-neutral-500">{p.description}</p>
+                )}
+                <p className="mt-4">
+                  <span className="text-4xl font-bold">¥{yuan(p.priceCents)}</span>
+                  <span className="text-neutral-500"> /月</span>
+                </p>
+                <ul className="mt-6 space-y-2 text-sm text-neutral-600">
+                  <li className="flex items-center gap-2">
+                    <span className="text-brand">✓</span>每月 {formatSeconds(p.monthlySeconds)} 转写额度
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-brand">✓</span>AI 润色 + 关键词高亮
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-brand">✓</span>高清成片导出
+                  </li>
+                </ul>
+                {/* CTA：锚到页面底部付款区（MVP 激活码模式无在线支付） */}
+                <a
+                  href="#pay"
+                  className={`mt-8 block rounded-xl py-2.5 text-center text-sm font-medium transition-colors ${
+                    featured
+                      ? "bg-brand text-white hover:bg-brand-strong"
+                      : "border border-brand/30 bg-brand-soft text-brand hover:bg-brand/10"
+                  }`}
+                >
+                  扫码购买
+                </a>
+              </div>
+            );
+          })}
           {plans.length === 0 && (
             <p className="col-span-3 text-center text-sm text-neutral-400">
               暂无在售套餐，请稍后再来
@@ -110,7 +131,7 @@ export default async function PricingPage() {
               return (
                 <div
                   key={pkg.id}
-                  className={`relative rounded-2xl border bg-white p-6 shadow-sm ${
+                  className={`relative rounded-2xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
                     i === 1 ? "border-brand/40 ring-1 ring-brand/20" : "border-black/5"
                   }`}
                 >
@@ -136,8 +157,8 @@ export default async function PricingPage() {
           </div>
         </section>
 
-        {/* 购买流程 */}
-        <section className="mt-12 rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
+        {/* 购买流程（id 供套餐卡 CTA 锚点滚动） */}
+        <section id="pay" className="mt-12 scroll-mt-20 rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
           <h2 className="text-lg font-semibold">购买流程（三步到账）</h2>
           <ol className="mt-6 grid gap-6 md:grid-cols-3">
             <li>
@@ -194,7 +215,7 @@ export default async function PricingPage() {
               href="/dashboard/redeem"
               className="inline-block rounded-xl bg-brand px-8 py-3 font-medium text-white transition-colors hover:bg-brand-strong"
             >
-              已购？去兑换激活码 →
+              已购？去兑换激活码
             </Link>
           </div>
         </section>
