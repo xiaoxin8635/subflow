@@ -20,7 +20,7 @@
  *             POST /api/projects/[id]/exports、GET /api/exports/[id]、
  *             GET /api/projects/[id]/translations?withSegments=1（双语预览）。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SubtitleOverlay } from "@/components/subtitle-overlay";
 import { parseStyleConfig } from "@/lib/style-config";
 import type { StyleConfig } from "@/lib/style-config";
@@ -72,6 +72,38 @@ function fmt(t: number): string {
   const m = Math.floor(t / 60);
   const s = t % 60;
   return `${String(m).padStart(2, "0")}:${s.toFixed(1).padStart(4, "0")}`;
+}
+
+/** 快捷键键帽（白底描边 + 底边实体阴影，与全站实体按键同一母题语言） */
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border border-neutral-200 bg-white px-1.5 font-mono text-[10px] font-medium text-neutral-500 shadow-[0_1.5px_0_0_#e5e5e5]">
+      {children}
+    </kbd>
+  );
+}
+
+/**
+ * 样式模板 chips 的迷你预览：中灰小底上按模板字色/描边渲染示意字，
+ * 不点开就能看出「白字黑边 / 黄字 / 纯白」的区别（config 非法时退化为白字）。
+ * 底色取中灰：亮色画面上黑描边可辨，白/黄字色也都可见
+ * @param config 样式模板 config JSON（StyleConfig 契约）
+ */
+function StyleDot({ config }: { config: unknown }) {
+  const cfg = parseStyleConfig(config);
+  const oc = cfg && cfg.outlineWidth > 0 && cfg.outlineColor ? cfg.outlineColor : null;
+  return (
+    <span
+      aria-hidden
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-neutral-500 text-[10px] leading-none"
+      style={{
+        color: cfg?.primaryColor ?? "#ffffff",
+        textShadow: oc ? `-.6px 0 0 ${oc}, .6px 0 0 ${oc}, 0 -.6px 0 ${oc}, 0 .6px 0 ${oc}` : undefined,
+      }}
+    >
+      字
+    </span>
+  );
 }
 
 /**
@@ -658,12 +690,13 @@ export function SubtitleEditor({
             <span className="text-sm font-medium">字幕样式</span>
             <span className="flex items-center gap-2 text-xs text-neutral-400">
               <span>当前：{activeStyleName ?? "系统默认"}</span>
-              <span
+              <svg
                 aria-hidden
-                className={`transition-transform ${styleOpen ? "rotate-180" : ""}`}
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${styleOpen ? "rotate-180" : ""}`}
               >
-                ▾
-              </span>
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </span>
           </button>
           {styleOpen && (
@@ -672,12 +705,13 @@ export function SubtitleEditor({
               <button
                 key={s.id}
                 onClick={() => selectStyle("official", s)}
-                className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full py-1.5 pl-2 pr-3.5 text-sm transition-colors ${
                   styleSource === "official" && activeStyleId === s.id
                     ? "bg-brand text-white"
                     : "border border-neutral-200 text-neutral-600 hover:border-brand/40 hover:text-brand"
                 }`}
               >
+                <StyleDot config={s.config} />
                 {s.name}
               </button>
             ))}
@@ -704,10 +738,11 @@ export function SubtitleEditor({
                     >
                       <button
                         onClick={() => selectStyle("user", s)}
-                        className={`py-1.5 pl-3.5 pr-1.5 transition-colors ${
+                        className={`inline-flex items-center gap-1.5 py-1.5 pl-2 pr-1.5 transition-colors ${
                           active ? "" : "hover:text-brand"
                         }`}
                       >
+                        <StyleDot config={s.config} />
                         {s.name}
                       </button>
                       <button
@@ -740,9 +775,17 @@ export function SubtitleEditor({
               <button
                 type="button"
                 onClick={() => setTweakOpen((v) => !v)}
-                className="text-xs font-medium text-brand transition-colors hover:text-brand-strong"
+                aria-expanded={tweakOpen}
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand transition-colors hover:text-brand-strong"
               >
-                {tweakOpen ? "收起样式微调 ▲" : "微调当前样式 ▼"}
+                {tweakOpen ? "收起样式微调" : "微调当前样式"}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                  className={`h-3 w-3 transition-transform duration-200 ${tweakOpen ? "rotate-180" : ""}`}
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </button>
               {tweakOpen && (
                 <div className="mt-3 space-y-3">
@@ -980,17 +1023,42 @@ export function SubtitleEditor({
           >
             {bundleBusy ? "打包中…" : "打包"}
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !dirty}
-            className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
-          >
-            {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
-          </button>
+          {/* 保存三态即两种形态：有改动/保存中 = 实体按键（动作）；无改动 = 绿色状态胶囊（状态长得像状态） */}
+          {dirty || saving ? (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+            >
+              {saving ? "保存中…" : "保存修改"}
+            </button>
+          ) : (
+            <span
+              role="status"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden>
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              已保存
+            </span>
+          )}
         </div>
-        <p className="mt-1 shrink-0 text-xs text-neutral-400">
-          点击行跳转播放 · 空格 播放/暂停 · ← → 快退/快进 2 秒 · Ctrl+S 保存
-        </p>
+        {/* 快捷键说明：键帽样式分组可扫读（键帽与实体按键同母题） */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs text-neutral-400">
+          <span>点击行跳转播放</span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>空格</Kbd>播放 / 暂停
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>←</Kbd>
+            <Kbd>→</Kbd>快退 / 快进 2 秒
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>Ctrl</Kbd>
+            <Kbd>S</Kbd>保存
+          </span>
+        </div>
 
         {/* 音频波形时间轴（转写时旁路生成；旧项目/提取失败时不渲染，退化为行内轨道条） */}
         {waveformKey && durationSec > 0 && (
@@ -1133,10 +1201,10 @@ export function SubtitleEditor({
             return (
               <li
                 key={idx}
-                className={`rounded-xl border px-4 py-3 transition-colors ${
+                className={`group rounded-xl border px-4 py-3 transition-colors ${
                   isActive
                     ? "border-brand/40 bg-brand-soft/60"
-                    : "border-black/5 bg-white hover:bg-neutral-50"
+                    : "border-black/5 bg-white hover:border-black/10 hover:bg-neutral-50"
                 }`}
               >
                 {isEditing ? (
@@ -1205,7 +1273,7 @@ export function SubtitleEditor({
                       <div className="flex shrink-0 gap-1">
                         <button
                           onClick={() => insertBefore(idx)}
-                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-brand"
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-300 transition-colors hover:bg-neutral-100 hover:text-brand group-hover:text-neutral-400"
                           title="在上方插入一行"
                         >
                           ＋
@@ -1213,7 +1281,7 @@ export function SubtitleEditor({
                         <button
                           onClick={() => removeSegment(idx)}
                           disabled={segments.length <= 1}
-                          className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-md px-1.5 py-1 text-xs text-neutral-300 transition-colors hover:bg-red-50 hover:text-red-500 group-hover:text-neutral-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:group-hover:text-neutral-300"
                           title="删除此行"
                         >
                           ✕

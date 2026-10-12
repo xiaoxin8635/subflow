@@ -136,11 +136,25 @@ export function ProjectLiveView({
         <h1 className="text-2xl font-bold tracking-tight">{project.title}</h1>
         <ProjectStatusBadge status={project.status} />
       </div>
-      <p className="mt-1 text-sm text-neutral-500">
-        {project.durationSec != null && <>时长 {formatDuration(project.durationSec)} · </>}
-        {project.transcript?.asrProvider && <>引擎 {project.transcript.asrProvider} · </>}
-        {project.transcript?.llmPolished ? "已经 AI 润色" : "未润色"}
-      </p>
+      {/* 元信息：时长用平铺文字，润色状态用胶囊徽章（识别引擎技术名对创作者无意义，收进悬停提示） */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500">
+        {project.durationSec != null && (
+          <span>时长 {formatDuration(project.durationSec)}</span>
+        )}
+        {project.transcript?.llmPolished ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600"
+            title={project.transcript.asrProvider ? `识别引擎 ${project.transcript.asrProvider}` : undefined}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden>
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            AI 已润色
+          </span>
+        ) : (
+          <span>未润色</span>
+        )}
+      </div>
 
       {/* 处理中：监视器占位（转写中封面带扫描线，与工作台列表同款母语）+ 状态行 */}
       {ACTIVE_STATUSES.has(project.status) && (
