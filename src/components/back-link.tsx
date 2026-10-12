@@ -1,8 +1,8 @@
 /**
  * @file 返回导航胶囊按钮（登录态页面顶部统一的「返回」入口）
- * @description 白底胶囊 + stroke 左箭头（1.7 线宽与全站图标一致）；
- *              hover 时描边与文字染品牌色、箭头左移 2px 给出「会返回」的
- *              方向性微交互。替换各页面原先的纯文本「← 返回…」链接。
+ * @description 「剪辑台」工具语言的返回键：白底胶囊内嵌一枚品牌软底圆形箭头键，
+ *              hover 时圆底染成实心品牌色、箭头翻白并左移——方向感先行，
+ *              像按下播放器上的回退键。三页（新建/详情/邀请）复用同一组件。
  */
 import Link from "next/link";
 
@@ -19,21 +19,23 @@ export function BackLink({ href, label }: BackLinkProps) {
   return (
     <Link
       href={href}
-      className="group inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-sm text-neutral-600 shadow-sm transition-colors hover:border-brand/40 hover:text-brand"
+      className="group inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white py-1 pl-1 pr-3.5 text-sm font-medium text-neutral-700 shadow-sm transition-all hover:border-brand/30 hover:shadow-md"
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5"
-        aria-hidden
-      >
-        <path d="M19 12H5" />
-        <path d="m11 18-6-6 6-6" />
-      </svg>
+      <span className="flex h-6.5 w-6.5 items-center justify-center rounded-full bg-brand-soft text-brand transition-colors duration-200 group-hover:bg-brand group-hover:text-white">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-px"
+          aria-hidden
+        >
+          <path d="M19 12H5" />
+          <path d="m11 18-6-6 6-6" />
+        </svg>
+      </span>
       {label}
     </Link>
   );

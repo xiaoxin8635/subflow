@@ -816,11 +816,11 @@ export function NewUploadClient() {
       {/* 批量结果汇总 */}
       {summary && <p className="mt-4 text-center text-sm text-amber-600">{summary}</p>}
 
-      {/* 提交按钮（上传中内衬整体进度条，进度即界面） */}
+      {/* 提交按钮（实体按键感：底部硬阴影，hover 抬升 / 按下下沉；上传中内衬整体进度条） */}
       <button
         onClick={handleUpload}
         disabled={uploading || rows.length === 0 || hasInvalid || rows.every((r) => r.status === "done")}
-        className="relative mt-8 w-full overflow-hidden rounded-xl bg-brand py-3 font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+        className="relative mt-8 w-full overflow-hidden rounded-xl bg-brand py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
       >
         {uploading && (
           <span
