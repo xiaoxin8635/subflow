@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@prisma/client";
 import { formatDuration, ProjectStatusBadge } from "@/components/project-status";
 import { ProjectCover } from "@/components/project-cover";
+import { FilmEmpty3D } from "@/components/empty-illustration";
 import {
   browserNotify,
   notificationPermission,
@@ -197,7 +198,13 @@ export function ProjectLiveView({
       {project.status === "READY" &&
         (segments.length === 0 ? (
           <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-black/5 bg-white p-10 text-center shadow-sm">
-            <p className="text-sm text-neutral-500">未识别到字幕内容</p>
+            <div className="empty-float flex justify-center">
+              <FilmEmpty3D />
+            </div>
+            <p className="mt-4 font-medium">未识别到字幕内容</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              这段素材里没有可提取的语音或画面文字，可返回重新上传其他视频
+            </p>
           </div>
         ) : (
           <SubtitleEditor

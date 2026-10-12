@@ -107,3 +107,28 @@ body {
     visibility: hidden;
   }
 }
+
+/* =====================================================================
+ * 空状态立体图标缓浮（empty-illustration.tsx 配套）
+ * 图标整体上下 4px 缓慢浮动，赋予「悬浮在页面上」的轻感；
+ * 尊重系统减弱动效设置：reduce 时停用。
+ * ===================================================================== */
+@keyframes empty-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.empty-float {
+  animation: empty-float 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-float {
+    animation: none;
+  }
+}

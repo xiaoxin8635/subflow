@@ -12,6 +12,7 @@ import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { ensureInviteCode } from "@/lib/invite";
 import { INVITE_REWARD_INVITER_SECONDS, INVITE_REWARD_INVITEE_SECONDS } from "@/lib/constants";
 import { AppShell } from "@/components/app-shell";
+import { MailEmpty3D } from "@/components/empty-illustration";
 import { InviteActions } from "./invite-actions";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
@@ -99,7 +100,13 @@ export default async function InvitePage() {
         <div className="mt-4 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
           <h2 className="font-semibold">邀请记录</h2>
           {records.length === 0 ? (
-            <p className="mt-3 text-sm text-neutral-400">还没有好友通过你的邀请注册</p>
+            <div className="flex flex-col items-center py-8 text-center">
+              <div className="empty-float">
+                <MailEmpty3D />
+              </div>
+              <p className="mt-3 text-sm text-neutral-400">还没有好友通过你的邀请注册</p>
+              <p className="mt-1 text-xs text-neutral-400">把上面的邀请链接发给朋友，记录会出现在这里</p>
+            </div>
           ) : (
             <ul className="mt-3 divide-y divide-neutral-100">
               {records.map((r) => (

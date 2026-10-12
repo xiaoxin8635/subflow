@@ -5,11 +5,13 @@
  * @description 客户端组件：60 秒轮询 GET /api/notifications 展示未读红点，
  *              点击打开下拉列表（最近 30 条），点条目标记已读并跳转 link，
  *              支持「全部已读」。tab 可见时立即刷新一次（回页即见最新）。
- *              挂载点：AppShell 侧边栏（variant="dark"）与 project 详情页顶栏
- *              （默认浅色），两种宿主配色由 BELL_STYLES 区分。
+ *              挂载点：AppShell 侧边栏（variant="dark"，铃铛贴近视口底部，
+ *              面板向上弹出）与 project 详情页顶栏（默认浅色，面板向下弹出），
+ *              两种宿主配色与弹出方向由 variant 区分。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MailEmpty3D } from "@/components/empty-illustration";
 
 /** 通知条目结构（GET /api/notifications 的 item） */
 type NotificationItem = {
@@ -163,8 +165,13 @@ export function NotificationBell({ variant = "light" }: { variant?: "light" | "d
         )}
       </button>
 
+      {/* 下拉面板：侧边栏宿主（铃铛贴近视口底部）向上弹，顶栏宿主向下弹 */}
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-lg">
+        <div
+          className={`absolute right-0 z-50 w-80 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-lg ${
+            variant === "dark" ? "bottom-full mb-2" : "top-11"
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
             <span className="text-sm font-medium">通知</span>
             {unread > 0 && (
@@ -174,7 +181,10 @@ export function NotificationBell({ variant = "light" }: { variant?: "light" | "d
             )}
           </div>
           {items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-neutral-400">暂无通知</p>
+            <div className="flex flex-col items-center px-4 py-7 text-center">
+              <MailEmpty3D size="sm" />
+              <p className="mt-2 text-sm text-neutral-400">暂无通知</p>
+            </div>
           ) : (
             <ul className="max-h-80 overflow-y-auto">
               {items.map((item) => {

@@ -18,6 +18,7 @@ import { ProjectStatusBadge } from "@/components/project-status";
 import { ProjectCover } from "@/components/project-cover";
 import { FilterTabs, type StatusFilter } from "@/components/filter-tabs";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { FolderEmpty3D, SearchEmpty3D } from "@/components/empty-illustration";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
 export const instant = false;
@@ -152,12 +153,10 @@ export default async function DashboardPage({
             {counts.all === 0 ? (
               // 从未有过项目：引导上传
               <div className="flex min-h-[380px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-neutral-900">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white" aria-hidden>
-                    <path d="M8 5.5v13a.7.7 0 0 0 1.07.6l10.2-6.5a.7.7 0 0 0 0-1.2L9.07 4.9A.7.7 0 0 0 8 5.5Z" />
-                  </svg>
+                <div className="empty-float">
+                  <FolderEmpty3D size="lg" />
                 </div>
-                <p className="mt-4 font-medium">还没有项目</p>
+                <p className="mt-5 font-medium">还没有项目</p>
                 <p className="mt-1 text-sm text-neutral-500">上传第一个视频，AI 自动生成字幕</p>
                 <Link
                   href="/dashboard/new"
@@ -169,7 +168,10 @@ export default async function DashboardPage({
             ) : (
               // 筛选无结果：给出回到全部的出口
               <div className="flex min-h-[240px] flex-col items-center justify-center text-center">
-                <p className="text-sm text-neutral-500">没有符合筛选的项目</p>
+                <div className="empty-float">
+                  <SearchEmpty3D />
+                </div>
+                <p className="mt-4 text-sm text-neutral-500">没有符合筛选的项目</p>
                 <Link
                   href="/dashboard"
                   className="mt-3 text-sm font-medium text-brand underline-offset-2 hover:underline"
