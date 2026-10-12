@@ -132,3 +132,47 @@ body {
     animation: none;
   }
 }
+
+/* =====================================================================
+ * 表单微动效（新建项目页等）：文件行进入 slide-up、完成勾标 pop
+ * 均为响应用户操作的一次性过渡（非循环装饰），尊重系统减弱动效设置。
+ * ===================================================================== */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.28s ease-out both;
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.pop-in {
+  animation: pop-in 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .pop-in {
+    animation: none;
+  }
+}
