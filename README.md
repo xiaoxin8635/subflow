@@ -117,6 +117,13 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       chips + 下方动态 hint 行；「识别设置」收成折叠条（收起显示当前值摘要
       如「通用 · 中文（普通话）」，上传中禁改）；上传按钮内衬批量整体进度条；
       新增 `rise-in`/`pop-in` 微动效（尊重 prefers-reduced-motion）
+- [x] **P2.18 识别设置面板精修**：[new-upload.tsx](src/app/dashboard/new/new-upload.tsx)
+      表单控件与整体键帽/实体键体系统一（交互逻辑零改动）——场景四档 chips
+      加 stroke SVG 图标（话筒/烧杯/购物袋/学士帽，未选中态图标淡灰）；语言
+      select 去 native 外观（appearance-none + 自绘 chevron + 底边实体阴影）；
+      噪声抑制原生 checkbox 改 switch 开关（sr-only input + peer 轨道圆点，
+      表单语义不变）；语言与噪声抑制两列布局（窄屏自动堆叠，去掉基线 hack）；
+      热词标题行右侧实时计数 N/50（与折叠条摘要同一 trim 口径，空段不计）
 - [x] **P2.17 编辑器舒适度精修**：[subtitle-editor.tsx](src/app/project/[id]/subtitle-editor.tsx) + [project-live-view.tsx](src/app/project/[id]/project-live-view.tsx)
       项目详情页按钮/标签视觉与可读性打磨（交互逻辑零改动）——标题元信息
       去 middle-dot 串接，引擎技术名收进悬停提示，「AI 已润色」改绿色勾徽章；
