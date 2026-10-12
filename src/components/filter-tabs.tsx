@@ -71,7 +71,17 @@ export function FilterTabs({ current, counts }: FilterTabsProps) {
             }`}
           >
             {o.label}
-            <span className="ml-1.5 text-xs tabular-nums text-neutral-400">{counts[o.key === "" ? "all" : o.key]}</span>
+            <span
+              className={`ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums transition-colors motion-reduce:transition-none ${
+                selected
+                  ? "bg-brand/10 font-medium text-brand"
+                  : counts[o.key === "" ? "all" : o.key] === 0
+                    ? "bg-neutral-50 text-neutral-300"
+                    : "bg-neutral-100 text-neutral-500"
+              }`}
+            >
+              {counts[o.key === "" ? "all" : o.key]}
+            </span>
           </button>
         );
       })}

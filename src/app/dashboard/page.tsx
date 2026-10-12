@@ -133,9 +133,12 @@ export default async function DashboardPage({
             <p className="text-2xl font-semibold tabular-nums leading-none text-brand">
               {formatSecondsLabel(user.balanceSeconds)}
             </p>
-            <p className="mt-1.5 text-xs text-neutral-400">
-              剩余额度 ·{" "}
-              <Link href="/dashboard/redeem" className="text-neutral-500 underline-offset-2 hover:text-brand hover:underline">
+            <p className="mt-1.5 flex items-center gap-2 text-xs text-neutral-400">
+              剩余额度
+              <Link
+                href="/dashboard/redeem"
+                className="rounded-full bg-brand-soft px-2 py-0.5 font-medium text-brand transition-colors hover:bg-brand hover:text-white motion-reduce:transition-none"
+              >
                 兑换
               </Link>
             </p>
