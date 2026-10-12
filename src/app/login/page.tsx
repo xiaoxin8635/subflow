@@ -1,14 +1,69 @@
 "use client";
 /**
- * @file 登录页（手机号 + 短信验证码，支持邀请码）
- * @description 客户端组件：手机号格式校验、验证码 60 秒倒计时、提交登录。
- *              邀请链接（/login?ref=CODE）自动填充邀请码，仅新用户注册时生效。
- *              依赖 API：POST /api/auth/sms（发码）、POST /api/auth/login（登录）。
+ * @file 登录页（手机号 + 短信验证码，支持邀请码）——左右分栏版式
+ * @description 桌面端（≥lg）左侧为产品舞台：一个迷你播放器 mock（深色视频帧上
+ *               字幕逐句浮现、关键词品牌色高亮，下方波形条呼应编辑器音轨），
+ *               纯 CSS 动画、尊重 prefers-reduced-motion；右侧为登录卡。
+ *               移动端只保留顶部 Logo 行 + 登录卡。表单逻辑：手机号格式校验、
+ *               验证码 60 秒倒计时、提交登录；邀请链接（/login?ref=CODE）自动
+ *               填充邀请码，仅新用户注册时生效。
+ *               依赖 API：POST /api/auth/sms（发码）、POST /api/auth/login（登录）。
  */
 
-import { useEffect, useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { PHONE_RE, INVITE_CODE_RE } from "@/lib/constants";
+
+/** 播放器 mock 里轮播的一句字幕（before + 关键词高亮 + after 拼成整句） */
+const CAPTIONS = [
+  { before: "大家好，欢迎来到", kw: "我的频道", after: "" },
+  { before: "今天带大家逛逛", kw: "老城区", after: "的巷子" },
+  { before: "这条街已有", kw: "一百年", after: "历史，还是老味道" },
+];
+
+/** 波形条高度序列（%）：确定性伪随机，呼应编辑器的音频波形轨道 */
+const WAVE_BARS = [
+  38, 62, 45, 80, 30, 55, 90, 48, 66, 35, 74, 52, 88, 42, 60, 28, 70, 46, 82,
+  36, 58, 76, 44, 64, 32, 78, 50, 68, 40, 56,
+];
+
+/** 已播放染色的波形条数量（约前 1/3，模拟播放进度） */
+const WAVE_PLAYED = 11;
+
+/** 左侧产品舞台的三条价值点（stroke 线性图标风格与工作台侧边栏一致） */
+const VALUE_PROPS: { icon: ReactNode; title: string; desc: string }[] = [
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-4 w-4">
+        <path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" />
+      </svg>
+    ),
+    title: "语音转字幕",
+    desc: "中文 / 英文视频，几分钟出稿",
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      </svg>
+    ),
+    title: "一键翻译",
+    desc: "译文与原文逐句对齐，时间轴不动",
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1-.3 2.1.3 2.4 1.4Z" />
+        <path d="m6.2 5.3 3.1 3.9" />
+        <path d="m12.4 3.4 3.1 4" />
+        <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+      </svg>
+    ),
+    title: "烧录成片",
+    desc: "关键词高亮样式，直接导出视频",
+  },
+];
 
 /** 登录页组件 */
 export default function LoginPage() {
@@ -84,9 +139,107 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <SiteHeader />
-      <main className="flex flex-1 items-center justify-center px-4 py-16">
+    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.1fr_1fr]">
+      {/* ============ 左侧产品舞台（桌面端） ============ */}
+      <aside className="hidden flex-col bg-[linear-gradient(180deg,#eef2ff_0%,#fafafa_100%)] p-10 lg:flex xl:p-14">
+        {/* Logo（链接回首页） */}
+        <Link href="/" className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-sm font-bold text-white">
+            SF
+          </span>
+          <span className="text-lg font-semibold tracking-tight">
+            SubFlow{" "}
+            <span className="text-sm font-normal text-neutral-500">字幕工坊</span>
+          </span>
+        </Link>
+
+        <div className="flex flex-1 flex-col justify-center py-10">
+          {/* 主张文案 */}
+          <h2 className="text-3xl font-semibold leading-tight tracking-tight xl:text-4xl">
+            上传一段视频，
+            <br />
+            拿回一套能直接用的字幕。
+          </h2>
+
+          {/* 迷你播放器 mock：字幕逐句浮现（产品核心产出的直观预览） */}
+          <div className="mt-8 max-w-lg overflow-hidden rounded-2xl shadow-[0_24px_60px_-18px_rgba(79,70,229,0.35)]">
+            <div className="relative aspect-video bg-[linear-gradient(135deg,#1e1b4b_0%,#3730a3_55%,#6366f1_130%)]">
+              {/* 播放按钮（静态装饰，中央半透明圆钮） */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/30 bg-white/10 backdrop-blur-sm">
+                  <svg viewBox="0 0 24 24" fill="white" className="ml-1 h-5 w-5" aria-hidden>
+                    <path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10.54-6.86a1.05 1.05 0 0 0 0-1.76L9.56 4.26A1.04 1.04 0 0 0 8 5.14z" />
+                  </svg>
+                </span>
+              </div>
+              {/* 字幕层：三句轮播（login-caption 动画见 globals.css） */}
+              <div className="absolute inset-x-0 bottom-6 flex justify-center px-8">
+                <div className="relative h-12 w-full max-w-sm">
+                  {CAPTIONS.map((c, i) => (
+                    <p
+                      key={i}
+                      className="login-caption absolute inset-0 flex items-end justify-center text-center text-sm leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)] sm:text-base"
+                    >
+                      <span>
+                        {c.before}
+                        <span className="font-medium text-indigo-300">{c.kw}</span>
+                        {c.after}
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+              {/* 时长角标（与项目封面同款位置语言） */}
+              <span className="absolute bottom-3 right-3 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-white">
+                00:35
+              </span>
+            </div>
+          </div>
+
+          {/* 波形条（呼应编辑器音轨；前段品牌色 = 已播放染色） */}
+          <div className="mt-5 flex h-10 max-w-lg items-center gap-[3px]" aria-hidden>
+            {WAVE_BARS.map((v, i) => (
+              <span
+                key={i}
+                className={`w-1 rounded-full ${i < WAVE_PLAYED ? "bg-brand" : "bg-indigo-200"}`}
+                style={{ height: `${v}%` }}
+              />
+            ))}
+          </div>
+
+          {/* 三条价值点（平铺行，不做卡片阵列） */}
+          <ul className="mt-8 max-w-lg space-y-4">
+            {VALUE_PROPS.map((p) => (
+              <li key={p.title} className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-indigo-100 bg-white text-brand">
+                  {p.icon}
+                </span>
+                <span>
+                  <span className="block text-sm font-medium">{p.title}</span>
+                  <span className="mt-0.5 block text-sm text-neutral-500">{p.desc}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* 页脚微文案 */}
+        <p className="text-xs text-neutral-400">无需安装，全部流程在浏览器完成</p>
+      </aside>
+
+      {/* ============ 右侧登录卡 ============ */}
+      <main className="flex flex-1 flex-col items-center justify-center px-4 py-12">
+        {/* 移动端顶部 Logo 行（桌面端左侧已有） */}
+        <Link href="/" className="mb-8 flex items-center gap-2 lg:hidden">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-sm font-bold text-white">
+            SF
+          </span>
+          <span className="text-lg font-semibold tracking-tight">
+            SubFlow{" "}
+            <span className="text-sm font-normal text-neutral-500">字幕工坊</span>
+          </span>
+        </Link>
+
         <div className="w-full max-w-sm rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-bold tracking-tight">登录 / 注册</h1>
           <p className="mt-2 text-sm text-neutral-500">
@@ -175,6 +328,18 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+
+        {/* 条款提示 */}
+        <p className="mt-6 text-center text-xs text-neutral-400">
+          登录即表示同意
+          <Link href="/terms" className="underline underline-offset-2 hover:text-neutral-600">
+            《服务条款》
+          </Link>
+          与
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-neutral-600">
+            《隐私政策》
+          </Link>
+        </p>
       </main>
     </div>
   );

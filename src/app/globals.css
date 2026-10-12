@@ -63,3 +63,47 @@ body {
     animation: none;
   }
 }
+
+/* =====================================================================
+ * 登录页产品舞台：迷你播放器字幕逐句轮播（login/page.tsx 专用）
+ * 三句字幕共用同一动画（9 秒一轮，每句可见约 3 秒），负延迟错开相位；
+ * 尊重系统减弱动效设置：reduce 时停用动画，仅静态显示第一句。
+ * ===================================================================== */
+@keyframes login-caption-cycle {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  4%,
+  29% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  33%,
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.login-caption {
+  animation: login-caption-cycle 9s linear infinite;
+}
+
+.login-caption:nth-child(2) {
+  animation-delay: -3s;
+}
+
+.login-caption:nth-child(3) {
+  animation-delay: -6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-caption {
+    animation: none;
+  }
+  .login-caption:nth-child(2),
+  .login-caption:nth-child(3) {
+    visibility: hidden;
+  }
+}
