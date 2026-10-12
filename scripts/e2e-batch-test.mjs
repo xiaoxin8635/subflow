@@ -7,7 +7,7 @@
  *   ② 断言详情 API：status=UPLOADED 且 queuePosition 按入队顺序为 1、2
  *     （BullMQ 同优先级 FIFO；付费优先级由既有逻辑保证，此处同用户同优先级）
  *   ③ 恢复队列（resume）→ 轮询两项目至 READY → 断言 queuePosition 归 null
- *   ④ 批量上传入口渲染：/dashboard/new 页面含「可多选」文案
+ *   ④ 批量上传入口渲染：/dashboard/new 页面含拖放区引导文案
  *   说明：多文件选择/串行进度是浏览器交互，脚本覆盖其后端等价链路
  *   （逐文件 init→分片→complete→入队，上传接口本身已被 P0/OSS E2E 覆盖）。
  */
@@ -148,7 +148,7 @@ check("完成后 queuePosition 归 null", f1.queuePosition === null && f2.queueP
 console.log("[阶段④] 批量上传入口…");
 const newPage = await fetch(`${BASE}/dashboard/new`, { headers: { Cookie: cookie } });
 const html = await newPage.text();
-check("new 页 200 且含多选文案", newPage.ok && html.includes("可多选"), `HTTP ${newPage.status}`);
+check("new 页 200 且含拖放区引导文案", newPage.ok && html.includes("拖到这里"), `HTTP ${newPage.status}`);
 
 /* ---------- 清理 ---------- */
 await queue.close();

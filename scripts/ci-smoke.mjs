@@ -5,7 +5,7 @@
  *   ① 未登录：/api/me 401、/api/notifications 401
  *   ② 登录：dev 万能码流程
  *   ③ 魔数防御：伪造 mp4 内容分片上传 → complete 415
- *   ④ 轻接口：/api/styles 200、/dashboard 200、/dashboard/new 200（含多选文案）、
+ *   ④ 轻接口：/api/styles 200、/dashboard 200、/dashboard/new 200（含拖放区引导文案）、
  *     /api/notifications 空列表结构、已读接口参数校验 400
  * 运行前提：server 已启动（:3000）、SMS_DEV_MODE=true、数据库已 migrate/seed。
  */
@@ -94,7 +94,7 @@ const dash = await fetch(`${BASE}/dashboard`, { headers: { Cookie: cookie } });
 check("/dashboard 200", dash.ok, `HTTP ${dash.status}`);
 const newPage = await fetch(`${BASE}/dashboard/new`, { headers: { Cookie: cookie } });
 const newHtml = await newPage.text();
-check("/dashboard/new 200 且含多选文案", newPage.ok && newHtml.includes("可多选"), `HTTP ${newPage.status}`);
+check("/dashboard/new 200 且含拖放区引导文案", newPage.ok && newHtml.includes("拖到这里"), `HTTP ${newPage.status}`);
 const notif = await (await fetch(`${BASE}/api/notifications`, { headers: { Cookie: cookie } })).json();
 check("通知接口返回结构（unread/items）", typeof notif.unread === "number" && Array.isArray(notif.items));
 const badRead = await fetch(`${BASE}/api/notifications/read`, {
