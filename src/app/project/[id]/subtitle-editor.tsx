@@ -570,7 +570,7 @@ export function SubtitleEditor({
         <button
           type="button"
           onClick={() => setDrawer("export")}
-          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none"
         >
           导出成片
         </button>
@@ -892,7 +892,7 @@ export function SubtitleEditor({
                           type="button"
                           onClick={() => void handleSaveAsTemplate()}
                           disabled={savingTpl || !saveName.trim()}
-                          className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+                          className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
                         >
                           {savingTpl ? "保存中…" : "保存"}
                         </button>
@@ -983,7 +983,7 @@ export function SubtitleEditor({
           <button
             onClick={handleSave}
             disabled={saving || !dirty}
-            className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
           >
             {saving ? "保存中…" : dirty ? "保存修改" : "已保存"}
           </button>
@@ -1177,7 +1177,7 @@ export function SubtitleEditor({
                       <span className="flex-1" />
                       <button
                         onClick={() => setEditingIdx(null)}
-                        className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white transition-colors hover:bg-brand-strong"
+                        className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none"
                       >
                         完成
                       </button>

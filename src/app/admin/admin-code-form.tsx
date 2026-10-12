@@ -163,7 +163,7 @@ export function AdminCodeForm({ plans }: { plans: PlanOption[] }) {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-50"
+          className="rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
         >
           {submitting ? "生成中…" : "生成"}
         </button>

@@ -159,7 +159,7 @@ export function TranslateCard({
           type="button"
           disabled={starting}
           onClick={() => void start(selected)}
-          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
         >
           {starting ? "提交中…" : "开始翻译"}
         </button>

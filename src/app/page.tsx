@@ -103,7 +103,7 @@ export default function HomePage() {
             <div className="mt-10 flex items-center justify-center gap-4">
               <a
                 href="/dashboard"
-                className="rounded-xl bg-brand px-8 py-3.5 text-lg font-medium text-white shadow-lg shadow-brand/25 transition-colors hover:bg-brand-strong"
+                className="rounded-xl bg-brand px-8 py-3.5 text-lg font-medium text-white shadow-[0_5px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_7px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca]"
               >
                 免费开始使用
               </a>

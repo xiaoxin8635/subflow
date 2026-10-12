@@ -112,7 +112,7 @@ export function RedeemForm({ balanceSeconds }: { balanceSeconds: number }) {
         <button
           type="submit"
           disabled={submitting || !code.trim()}
-          className="w-full rounded-xl bg-brand px-5 py-3 font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-xl bg-brand px-5 py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
         >
           {submitting ? "兑换中…" : "立即兑换"}
         </button>

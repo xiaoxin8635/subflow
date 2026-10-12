@@ -213,7 +213,7 @@ export default async function PricingPage() {
           <div className="mt-8 text-center">
             <Link
               href="/dashboard/redeem"
-              className="inline-block rounded-xl bg-brand px-8 py-3 font-medium text-white transition-colors hover:bg-brand-strong"
+              className="inline-block rounded-xl bg-brand px-8 py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca]"
             >
               已购？去兑换激活码
             </Link>

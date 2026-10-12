@@ -322,7 +322,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={!phoneValid || code.length !== 6 || !inviteValid || submitting}
-              className="w-full rounded-xl bg-brand py-3 font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-xl bg-brand py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
             >
               {submitting ? "登录中…" : "登录"}
             </button>

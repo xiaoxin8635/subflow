@@ -113,7 +113,7 @@ export default async function DashboardPage({
           </div>
           <Link
             href="/dashboard/new"
-            className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all hover:-translate-y-px hover:bg-brand-strong motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+            className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
           >
             新建项目
           </Link>
@@ -160,7 +160,7 @@ export default async function DashboardPage({
                 <p className="mt-1 text-sm text-neutral-500">上传第一个视频，AI 自动生成字幕</p>
                 <Link
                   href="/dashboard/new"
-                  className="mt-5 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+                  className="mt-5 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca]"
                 >
                   新建项目
                 </Link>

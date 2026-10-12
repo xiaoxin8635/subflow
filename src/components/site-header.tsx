@@ -34,7 +34,7 @@ export function SiteHeader() {
           </Link>
           <Link
             href="/dashboard"
-            className="rounded-lg bg-brand px-4 py-2 font-medium text-white transition-colors hover:bg-brand-strong"
+            className="rounded-lg bg-brand px-4 py-2 font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none"
           >
             进入工作台
           </Link>
