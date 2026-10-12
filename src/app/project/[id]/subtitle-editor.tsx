@@ -20,7 +20,7 @@
  *             POST /api/projects/[id]/exports、GET /api/exports/[id]、
  *             GET /api/projects/[id]/translations?withSegments=1（双语预览）。
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { SubtitleOverlay } from "@/components/subtitle-overlay";
 import { parseStyleConfig } from "@/lib/style-config";
 import type { StyleConfig } from "@/lib/style-config";
@@ -80,6 +80,64 @@ function Kbd({ children }: { children: ReactNode }) {
     <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border border-neutral-200 bg-white px-1.5 font-mono text-[10px] font-medium text-neutral-500 shadow-[0_1.5px_0_0_#e5e5e5]">
       {children}
     </kbd>
+  );
+}
+
+/** 工具条小按钮图标（stroke 1.7 线性风格，随文字色继承） */
+function ToolIcon({ d, extra }: { d: string; extra?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={d} />
+      {extra && <path d={extra} />}
+    </svg>
+  );
+}
+
+/** 工具条五图标（时间轴=时钟 / 查找替换=放大镜 / TXT=文档 / MD=列表 / 打包=归档盒） */
+const TOOL_ICONS = {
+  timeline: { d: "M12 7v5l3 2", extra: "" },
+  find: { d: "m20 20-3.5-3.5", extra: "" },
+  doc: { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6", extra: "" },
+  list: { d: "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01", extra: "" },
+  bundle: { d: "M2 4h20v5H2z M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9 M10 13h4", extra: "" },
+} as const;
+
+/**
+ * 工具条小按钮（键帽质感）：白底描边 + 底边实体阴影 + 前置图标，
+ * hover 整体抬升、图标与文字翻品牌色、阴影加厚，active 按压下沉；
+ * 面板开关类（active=true）用品牌软底明示开启态
+ */
+function ToolChip({
+  icon,
+  label,
+  active = false,
+  className = "",
+  ...rest
+}: {
+  icon: { d: string; extra?: string };
+  label: string;
+  active?: boolean;
+  className?: string;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "children">) {
+  const look = active
+    ? "border border-brand bg-brand-soft font-medium text-brand"
+    : "border border-neutral-200 bg-white text-neutral-600 shadow-[0_1.5px_0_0_#e5e5e5] hover:-translate-y-px hover:border-brand/40 hover:text-brand hover:shadow-[0_2.5px_0_0_#e5e5e5] active:translate-y-px active:shadow-none";
+  return (
+    <button
+      type="button"
+      {...rest}
+      className={`group/tt inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none ${look} ${className}`}
+    >
+      <span
+        aria-hidden
+        className={`transition-colors [&_svg]:h-3.5 [&_svg]:w-3.5 ${
+          active ? "text-brand" : "text-neutral-400 group-hover/tt:text-brand"
+        }`}
+      >
+        <ToolIcon d={icon.d} extra={icon.extra} />
+      </span>
+      {label}
+    </button>
   );
 }
 
@@ -974,55 +1032,41 @@ export function SubtitleEditor({
           <span className="mr-auto shrink-0 whitespace-nowrap pr-2 text-sm text-neutral-500">
             共 {segments.length} 段
           </span>
-          <button
-            type="button"
-            onClick={() => setTlOpen((v) => !v)}
+          <ToolChip
+            icon={TOOL_ICONS.timeline}
+            label="时间轴"
+            active={tlOpen}
             title="字幕整体与语音不同步时批量偏移/伸缩"
-            className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-              tlOpen
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-black/10 text-neutral-600 hover:border-brand hover:text-brand"
-            }`}
-          >
-            时间轴
-          </button>
-          <button
-            type="button"
-            onClick={() => setFindOpen((v) => !v)}
+            aria-pressed={tlOpen}
+            onClick={() => setTlOpen((v) => !v)}
+          />
+          <ToolChip
+            icon={TOOL_ICONS.find}
+            label="查找替换"
+            active={findOpen}
             title="批量修正错别字 / 统一术语写法"
-            className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-              findOpen
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-black/10 text-neutral-600 hover:border-brand hover:text-brand"
-            }`}
-          >
-            查找替换
-          </button>
-          <button
-            type="button"
-            onClick={() => downloadScript(false)}
+            aria-pressed={findOpen}
+            onClick={() => setFindOpen((v) => !v)}
+          />
+          <ToolChip
+            icon={TOOL_ICONS.doc}
+            label="文稿TXT"
             title="逐句一行的纯文本文稿，可直接用于公众号 / 笔记"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
-          >
-            文稿TXT
-          </button>
-          <button
-            type="button"
-            onClick={() => downloadScript(true)}
+            onClick={() => downloadScript(false)}
+          />
+          <ToolChip
+            icon={TOOL_ICONS.list}
+            label="文稿MD"
             title="带时间戳的 Markdown 文稿（**mm:ss** 句文本）"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand"
-          >
-            文稿MD
-          </button>
-          <button
-            type="button"
-            onClick={() => void downloadBundle()}
+            onClick={() => downloadScript(true)}
+          />
+          <ToolChip
+            icon={TOOL_ICONS.bundle}
+            label={bundleBusy ? "打包中…" : "打包"}
             disabled={bundleBusy}
             title="打包下载全部字幕产物（原文三格式 + 文稿 + 已完成翻译与双语）"
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {bundleBusy ? "打包中…" : "打包"}
-          </button>
+            onClick={() => void downloadBundle()}
+          />
           {/* 保存三态即两种形态：有改动/保存中 = 实体按键（动作）；无改动 = 绿色状态胶囊（状态长得像状态） */}
           {dirty || saving ? (
             <button
