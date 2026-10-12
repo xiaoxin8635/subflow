@@ -5,13 +5,13 @@
  *              累计邀请人数与累计奖励、邀请记录列表（手机号脱敏）。
  *              数据直读数据库（与工作台同模式，不经自有 API）。
  */
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { ensureInviteCode } from "@/lib/invite";
 import { INVITE_REWARD_INVITER_SECONDS, INVITE_REWARD_INVITEE_SECONDS } from "@/lib/constants";
 import { AppShell } from "@/components/app-shell";
+import { BackLink } from "@/components/back-link";
 import { MailEmpty3D } from "@/components/empty-illustration";
 import { InviteActions } from "./invite-actions";
 
@@ -58,12 +58,7 @@ export default async function InvitePage() {
               把邀请码分享给朋友，注册时填写即可双方得额度
             </p>
           </div>
-          <Link
-            href="/dashboard"
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-neutral-600 transition-colors hover:border-brand hover:text-brand"
-          >
-            返回工作台
-          </Link>
+          <BackLink href="/dashboard" label="返回工作台" />
         </div>
 
         {/* 我的邀请码 */}

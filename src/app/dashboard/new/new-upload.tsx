@@ -15,9 +15,9 @@
  *   上传状态机与网络逻辑与旧版完全一致，仅视图层重构。
  */
 import { useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ASR_LANGUAGES, ASR_SCENES, MAX_UPLOAD_BYTES } from "@/lib/constants";
+import { BackLink } from "@/components/back-link";
 
 /** 允许的媒体扩展名与 MIME（视频 + 纯音频，与后端 EXT_BY_TYPE 保持一致） */
 const ACCEPT_TYPES: Record<string, string> = {
@@ -482,11 +482,7 @@ export function NewUploadClient() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-      <div className="flex items-center gap-2 text-sm text-neutral-500">
-        <Link href="/dashboard" className="transition-colors hover:text-brand">
-          ← 返回项目列表
-        </Link>
-      </div>
+      <BackLink href="/dashboard" label="返回项目列表" />
 
       <h1 className="mt-4 text-2xl font-bold tracking-tight">新建项目</h1>
       <p className="mt-1 text-sm text-neutral-500">
