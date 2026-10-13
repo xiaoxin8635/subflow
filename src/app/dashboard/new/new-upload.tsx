@@ -1,6 +1,6 @@
 "use client";
 /**
- * @file 新建项目上传主体（客户端组件，由 page.tsx 服务端壳包在 AppShell 内）
+ * @file 新建项目上传主体（客户端组件，渲染于 dashboard/layout.tsx 的外壳内容区）
  * @description 支持一次选择/拖入多个视频或音频（mp3/m4a/wav），串行逐个分片上传：
  *   ① POST /api/uploads/init 创建会话（或凭 sessionStorage 中的 uploadId 断点续传）
  *   ② 3 片并发上传分片（每片失败自动重试 2 次）：
@@ -228,7 +228,7 @@ function FileKindIcon({ file }: { file: File }) {
   return VIDEO_EXTS.has(ext) ? <VideoFileIcon /> : <AudioFileIcon />;
 }
 
-/** 新建项目上传主体组件（在 AppShell 内容区内渲染） */
+/** 新建项目上传主体组件（在 layout 外壳的内容区内渲染） */
 export function NewUploadClient() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);

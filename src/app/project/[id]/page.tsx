@@ -32,7 +32,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!project || project.userId !== user.id) notFound();
 
   return (
-    <AppShell active="projects" phone={user.phone} balanceSeconds={user.balanceSeconds}>
+    <AppShell phone={user.phone} balanceSeconds={user.balanceSeconds}>
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
         <BackLink href="/dashboard" label="返回项目列表" />
         <ProjectLiveView

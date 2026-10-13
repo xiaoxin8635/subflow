@@ -10,7 +10,6 @@ import { db } from "@/lib/db";
 import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { ensureInviteCode } from "@/lib/invite";
 import { INVITE_REWARD_INVITER_SECONDS, INVITE_REWARD_INVITEE_SECONDS, SIGNUP_BONUS_SECONDS } from "@/lib/constants";
-import { AppShell } from "@/components/app-shell";
 import { BackLink } from "@/components/back-link";
 import { MailEmpty3D } from "@/components/empty-illustration";
 import { InviteActions } from "./invite-actions";
@@ -49,78 +48,76 @@ export default async function InvitePage() {
   const totalReward = agg._sum.bonusInviterSec ?? 0;
 
   return (
-    <AppShell active="invite" phone={user.phone} balanceSeconds={user.balanceSeconds}>
-      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">邀请好友</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              把邀请码分享给朋友，注册时填写即可双方得额度
-            </p>
-          </div>
-          <BackLink href="/dashboard" label="返回工作台" />
-        </div>
-
-        {/* 我的邀请码 */}
-        <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-          <p className="text-sm text-neutral-500">我的邀请码</p>
-          <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-brand">
-            {inviteCode}
+    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">邀请好友</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            把邀请码分享给朋友，注册时填写即可双方得额度
           </p>
-          <p className="mt-3 text-sm text-neutral-500">
-            新朋友注册时填写你的邀请码，你得{" "}
-            <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITER_SECONDS)}</span>
-            ，TA 额外得{" "}
-            <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITEE_SECONDS)}</span>
-            （叠加在 {formatBonus(SIGNUP_BONUS_SECONDS)}注册赠送之上）。
-          </p>
-          <div className="mt-4">
-            <InviteActions inviteCode={inviteCode} />
-          </div>
         </div>
+        <BackLink href="/dashboard" label="返回工作台" />
+      </div>
 
-        {/* 累计统计 */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
-            <p className="text-2xl font-bold">{invitedCount}</p>
-            <p className="mt-1 text-sm text-neutral-500">已邀请好友</p>
-          </div>
-          <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
-            <p className="text-2xl font-bold text-brand">{formatBonus(totalReward)}</p>
-            <p className="mt-1 text-sm text-neutral-500">累计获得奖励</p>
-          </div>
-        </div>
-
-        {/* 邀请记录 */}
-        <div className="mt-4 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-          <h2 className="font-semibold">邀请记录</h2>
-          {records.length === 0 ? (
-            <div className="flex flex-col items-center py-8 text-center">
-              <div className="empty-float">
-                <MailEmpty3D />
-              </div>
-              <p className="mt-3 text-sm text-neutral-400">还没有好友通过你的邀请注册</p>
-              <p className="mt-1 text-xs text-neutral-400">把上面的邀请链接发给朋友，记录会出现在这里</p>
-            </div>
-          ) : (
-            <ul className="mt-3 divide-y divide-neutral-100">
-              {records.map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-sm font-medium">{maskPhone(r.invitee.phone)}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">
-                      {new Date(r.createdAt).toLocaleString("zh-CN", { hour12: false })}
-                    </p>
-                  </div>
-                  <span className="text-sm font-medium text-brand">
-                    +{formatBonus(r.bonusInviterSec)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* 我的邀请码 */}
+      <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+        <p className="text-sm text-neutral-500">我的邀请码</p>
+        <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-brand">
+          {inviteCode}
+        </p>
+        <p className="mt-3 text-sm text-neutral-500">
+          新朋友注册时填写你的邀请码，你得{" "}
+          <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITER_SECONDS)}</span>
+          ，TA 额外得{" "}
+          <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITEE_SECONDS)}</span>
+          （叠加在 {formatBonus(SIGNUP_BONUS_SECONDS)}注册赠送之上）。
+        </p>
+        <div className="mt-4">
+          <InviteActions inviteCode={inviteCode} />
         </div>
       </div>
-    </AppShell>
+
+      {/* 累计统计 */}
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
+          <p className="text-2xl font-bold">{invitedCount}</p>
+          <p className="mt-1 text-sm text-neutral-500">已邀请好友</p>
+        </div>
+        <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
+          <p className="text-2xl font-bold text-brand">{formatBonus(totalReward)}</p>
+          <p className="mt-1 text-sm text-neutral-500">累计获得奖励</p>
+        </div>
+      </div>
+
+      {/* 邀请记录 */}
+      <div className="mt-4 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+        <h2 className="font-semibold">邀请记录</h2>
+        {records.length === 0 ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <div className="empty-float">
+              <MailEmpty3D />
+            </div>
+            <p className="mt-3 text-sm text-neutral-400">还没有好友通过你的邀请注册</p>
+            <p className="mt-1 text-xs text-neutral-400">把上面的邀请链接发给朋友，记录会出现在这里</p>
+          </div>
+        ) : (
+          <ul className="mt-3 divide-y divide-neutral-100">
+            {records.map((r) => (
+              <li key={r.id} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm font-medium">{maskPhone(r.invitee.phone)}</p>
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    {new Date(r.createdAt).toLocaleString("zh-CN", { hour12: false })}
+                  </p>
+                </div>
+                <span className="text-sm font-medium text-brand">
+                  +{formatBonus(r.bonusInviterSec)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }

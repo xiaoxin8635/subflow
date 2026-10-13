@@ -6,6 +6,7 @@
  *   - 会话有效期 30 天，登出即删除记录，可服务端随时吊销
  */
 import { createHash, randomBytes } from "crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { db } from "./db";
 import type { User } from "@prisma/client";
@@ -48,9 +49,10 @@ export async function createSession(userId: string): Promise<void> {
 
 /**
  * 获取当前登录用户（含剩余额度）；未登录或会话过期返回 null
- * 供服务端组件与 API 路由共同使用
+ * 供服务端组件与 API 路由共同使用。
+ * 用 React cache 包裹：同一次 RSC 请求内（layout + 页面各调一次）只查一次库
  */
-export async function getCurrentUser(): Promise<User | null> {
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<User | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -62,7 +64,7 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!session || session.expiresAt < new Date()) return null;
 
   return session.user;
-}
+});
 
 /**
  * 销毁当前会话（删除数据库记录并清除 Cookie）
