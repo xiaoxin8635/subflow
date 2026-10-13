@@ -117,6 +117,19 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       chips + 下方动态 hint 行；「识别设置」收成折叠条（收起显示当前值摘要
       如「通用 · 中文（普通话）」，上传中禁改）；上传按钮内衬批量整体进度条；
       新增 `rise-in`/`pop-in` 微动效（尊重 prefers-reduced-motion）
+- [x] **P2.23 侧边栏滑动高亮层**：[side-nav.tsx](src/components/side-nav.tsx)（新）+
+      [layout.tsx](src/app/dashboard/layout.tsx)（新）+ [app-shell.tsx](src/components/app-shell.tsx) +
+      [auth.ts](src/lib/auth.ts) + 5 个页面
+      导航选中框不再瞬时跳变——高亮抽成 nav 内共享滑动层（client 组件），
+      切换页面时渐变底与左缘发光指示条整体平滑平移（300ms，尊重
+      prefers-reduced-motion），点击瞬间乐观起步不等路由。架构前提：侧边栏
+      从各页面移入 `dashboard/layout.tsx`（layout 跨页保留 DOM，放页面内会
+      随切换整树重建、动画无从发生），5 个页面剥掉 AppShell 包裹；
+      `/project/[id]` 在该路由段外自行渲染外壳，视觉一致但无跨段动画。
+      SSR/水合前由导航项自持高亮（直出无闪烁），水合后首帧绘制前
+      （useLayoutEffect）切换为滑动层并测量定位，ResizeObserver 兜底重测；
+      `getCurrentUser` 包 React cache——layout + 页面同请求只查一次会话库。
+      移动端顶部标签栏同步获得横向滑动高亮块
 - [x] **P2.22 定价页免费档修复**：[pricing/page.tsx](src/app/pricing/page.tsx) + [seed.mjs](prisma/seed.mjs) + [page.tsx](src/app/page.tsx) + [invite/page.tsx](src/app/dashboard/invite/page.tsx)
       「免费体验」档数据与渲染对齐真实语义（原 ¥0 却展示「/月」「每月 0 秒
       转写额度」并引导扫码付款）——pricing 页按 `priceCents === 0` 分流：
