@@ -5,8 +5,10 @@
  *   标记 FAILED），绝不静默回退原文——否则用户为「翻译」付了钱却拿到原文。
  *   长字幕按批次切分逐批翻译（单次 LLM 调用输出 token 有限，整项目一次调用
  *   在分段多时会截断），批内要求句数严格一致且逐句非空。
+ * 模型接入：经 AI 网关客户端工厂（ai-client.ts）——配置 AI_GATEWAY_* 走网关
+ *   多渠道 failover，未配置回落 DashScope 直连。
  */
-import OpenAI from "openai";
+import { createChatClient } from "./ai-client";
 
 /** 单次 LLM 调用翻译的句子数上限（控制输出长度，防止截断） */
 const TRANSLATE_BATCH_SIZE = 40;
@@ -17,16 +19,6 @@ export interface TranslateOptions {
   styleInstruction?: string;
   /** 术语表（项目热词，要求全片译法统一、品牌/产品名保留原文） */
   glossary?: string[];
-}
-
-/** 创建 DashScope 兼容模式客户端（与 polish.ts 同一接入方式） */
-function newClient(): OpenAI {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("缺少 DASHSCOPE_API_KEY 环境变量");
-  return new OpenAI({
-    apiKey,
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  });
 }
 
 /**
@@ -59,7 +51,7 @@ async function translateBatchOnce(
     );
   }
 
-  const res = await newClient().chat.completions.create({
+  const res = await createChatClient().chat.completions.create({
     model: "qwen-flash",
     temperature: 0.1,
     messages: [

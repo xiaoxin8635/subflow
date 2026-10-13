@@ -4,18 +4,10 @@
  *   - 严格保持句数与语序不变（字幕需要与时间轴一一对应）；
  *   - 可选注入场景描述与热词表（P2.11 场景自适应）：专有名词按标准写法输出；
  *   - 返回等长 JSON 数组；解析失败或长度不符时整体回退原文（降级不阻断流水线）。
+ * 模型接入：经 AI 网关客户端工厂（ai-client.ts）——配置 AI_GATEWAY_* 走网关
+ *   多渠道 failover，未配置回落 DashScope 直连。
  */
-import OpenAI from "openai";
-
-/** 创建 DashScope 兼容模式客户端 */
-function newClient(): OpenAI {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("缺少 DASHSCOPE_API_KEY 环境变量");
-  return new OpenAI({
-    apiKey,
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  });
-}
+import { createChatClient } from "./ai-client";
 
 /** 润色可选参数（P2.11 场景自适应） */
 export interface PolishOptions {
@@ -53,7 +45,7 @@ export async function polishSegments(
   }
 
   try {
-    const res = await newClient().chat.completions.create({
+    const res = await createChatClient().chat.completions.create({
       model: "qwen-flash",
       temperature: 0.1,
       messages: [

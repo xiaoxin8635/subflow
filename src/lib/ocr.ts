@@ -7,12 +7,14 @@
  *   单帧失败指数退避重试，最终失败抛错（走任务失败重试机制）。
  *   时间轴精度 = 采样间隔（1fps → 1 秒），对字幕场景足够。
  * 文档：https://help.aliyun.com/zh/model-studio/vision
+ * 模型接入：经 AI 网关客户端工厂（ai-client.ts）——配置 AI_GATEWAY_* 走网关
+ *   多渠道 failover，未配置回落 DashScope 直连。
  */
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import OpenAI from "openai";
 import { extractFrames } from "./media";
+import { createChatClient } from "./ai-client";
 import type { AsrResult } from "./asr/types";
 
 /** 视觉模型名（可用 OCR_MODEL 环境变量覆盖；qwen-vl-plus 旧名已下线会 404） */
@@ -28,16 +30,6 @@ const MAX_RETRIES = 2;
 const FRAME_PROMPT =
   "识别画面中出现的字幕文字（通常位于画面下方居中）。只输出字幕原文，不要任何解释、标点补充或引号；若画面中没有字幕文字，只输出一个空字符串。";
 
-/** 创建 DashScope 兼容模式客户端（与 ASR 同配置） */
-function newClient(): OpenAI {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("缺少 DASHSCOPE_API_KEY 环境变量");
-  return new OpenAI({
-    apiKey,
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  });
-}
-
 /** 休眠工具 */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,7 +43,7 @@ async function recognizeFrame(frameJpg: string): Promise<string> {
   let lastErr: unknown = new Error("未知错误");
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await newClient().chat.completions.create({
+      const res = await createChatClient().chat.completions.create({
         model: OCR_MODEL,
         messages: [
           {

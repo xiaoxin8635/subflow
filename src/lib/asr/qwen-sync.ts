@@ -6,11 +6,14 @@
  *     用 align.alignTextToSpeech 将文本铺到语音段上生成估算时间戳；
  *   - 生产环境（文件有公网 URL）应切换 qwen-filetrans provider 获取毫秒级真实时间戳。
  * 文档：https://help.aliyun.com/zh/model-studio/qwen-asr-api-reference
+ * 模型接入：经 AI 网关客户端工厂（src/lib/ai-client.ts）——配置 AI_GATEWAY_*
+ *   走网关多渠道 failover，未配置回落 DashScope 直连。
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import OpenAI from "openai";
+import { createChatClient } from "../ai-client";
 import { detectSpeechSegments, sliceAudio } from "../media";
 import { alignTextToSpeech } from "./align";
 import type { AsrProvider, AsrResult, TranscribeOptions } from "./types";
@@ -19,16 +22,6 @@ import type { AsrProvider, AsrResult, TranscribeOptions } from "./types";
 const CHUNK_SEC = 270;
 /** 单块请求失败重试次数（指数退避） */
 const MAX_RETRIES = 2;
-
-/** 创建 DashScope 兼容模式客户端 */
-function newClient(): OpenAI {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("缺少 DASHSCOPE_API_KEY 环境变量");
-  return new OpenAI({
-    apiKey,
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  });
-}
 
 /** 休眠工具 */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -94,7 +87,7 @@ async function transcribeChunkBase64(
   let lastErr: unknown = new Error("未知错误");
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await newClient().chat.completions.create(body);
+      const res = await createChatClient().chat.completions.create(body);
       const text = res.choices[0]?.message?.content?.trim() ?? "";
       if (!text) throw new Error("ASR 返回空文本");
       return text;

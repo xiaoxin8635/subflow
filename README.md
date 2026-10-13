@@ -117,6 +117,18 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       chips + 下方动态 hint 行；「识别设置」收成折叠条（收起显示当前值摘要
       如「通用 · 中文（普通话）」，上传中禁改）；上传按钮内衬批量整体进度条；
       新增 `rise-in`/`pop-in` 微动效（尊重 prefers-reduced-motion）
+- [x] **P2.24 AI 网关接入（new-api）**：[ai-client.ts](src/lib/ai-client.ts)（新）+
+      [polish.ts](src/lib/polish.ts) + [translate.ts](src/lib/translate.ts) +
+      [ocr.ts](src/lib/ocr.ts) + [asr/qwen-sync.ts](src/lib/asr/qwen-sync.ts) +
+      [docs/AI-GATEWAY.md](docs/AI-GATEWAY.md)（新）
+      4 个 OpenAI 兼容调用点（润色/翻译/OCR/同步 ASR）的 DashScope 直连
+      收敛为共享客户端工厂：配置 `AI_GATEWAY_BASE_URL` + `AI_GATEWAY_API_KEY`
+      即走自托管 new-api 网关（本机 127.0.0.1:3001），多上游渠道（DashScope /
+      火山方舟豆包）优先级路由 + 失败自动切换——主渠道额度耗尽自动落备用
+      渠道，用户无感知；未配置网关回落 DashScope 直连（渐进式迁移，随时
+      可回滚）。异步文件转写 qwen-filetrans 为 DashScope 专有 API 保持直连，
+      靠 BullMQ 队列缓冲 + 告警兜底。火山方舟 Chat 无音频输入形态（只有
+      文本/视觉），ASR 双渠道暂缓。部署/渠道配置/试点验证清单见 AI-GATEWAY.md
 - [x] **P2.23 侧边栏滑动高亮层**：[side-nav.tsx](src/components/side-nav.tsx)（新）+
       [layout.tsx](src/app/dashboard/layout.tsx)（新）+ [app-shell.tsx](src/components/app-shell.tsx) +
       [auth.ts](src/lib/auth.ts) + 5 个页面
