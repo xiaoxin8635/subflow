@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, maskPhone } from "@/lib/auth";
 import { ensureInviteCode } from "@/lib/invite";
-import { INVITE_REWARD_INVITER_SECONDS, INVITE_REWARD_INVITEE_SECONDS } from "@/lib/constants";
+import { INVITE_REWARD_INVITER_SECONDS, INVITE_REWARD_INVITEE_SECONDS, SIGNUP_BONUS_SECONDS } from "@/lib/constants";
 import { AppShell } from "@/components/app-shell";
 import { BackLink } from "@/components/back-link";
 import { MailEmpty3D } from "@/components/empty-illustration";
@@ -72,7 +72,7 @@ export default async function InvitePage() {
             <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITER_SECONDS)}</span>
             ，TA 额外得{" "}
             <span className="font-medium text-brand">{formatBonus(INVITE_REWARD_INVITEE_SECONDS)}</span>
-            （叠加在 30 分钟注册赠送之上）。
+            （叠加在 {formatBonus(SIGNUP_BONUS_SECONDS)}注册赠送之上）。
           </p>
           <div className="mt-4">
             <InviteActions inviteCode={inviteCode} />

@@ -13,7 +13,7 @@ const DEFAULT_PLANS = [
     name: "免费体验",
     priceCents: 0,
     monthlySeconds: 0,
-    description: "注册即送 30 分钟转写额度，体验完整功能",
+    description: "注册即用，体验完整转写流程",
   },
   {
     name: "基础版",

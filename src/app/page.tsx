@@ -5,6 +5,8 @@
  */
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { MAX_VIDEO_DURATION_SEC, SIGNUP_BONUS_SECONDS } from "@/lib/constants";
+import { formatSecondsLabel } from "@/lib/format";
 
 /** 落地页功能点配置 */
 const FEATURES = [
@@ -40,9 +42,9 @@ const FEATURES = [
   },
 ];
 
-/** 使用流程步骤 */
+/** 使用流程步骤（时长上限与 constants 单一来源一致） */
 const STEPS = [
-  { step: "1", title: "上传视频", desc: "拖拽上传，最大 500MB / 30 分钟" },
+  { step: "1", title: "上传视频", desc: `拖拽上传，最大 500MB / ${formatSecondsLabel(MAX_VIDEO_DURATION_SEC)}` },
   { step: "2", title: "AI 处理", desc: "自动转写 + 润色 + 关键词标记" },
   { step: "3", title: "编辑调整", desc: "逐句校对字幕，切换样式模板" },
   { step: "4", title: "导出成品", desc: "烧录字幕导出 MP4 + SRT" },
@@ -54,7 +56,7 @@ const PRICING = [
     name: "免费体验",
     price: "¥0",
     unit: "",
-    desc: "注册即送 30 分钟转写额度",
+    desc: `注册即送 ${formatSecondsLabel(SIGNUP_BONUS_SECONDS)}转写额度`,
     features: ["完整功能体验", "高清烧录导出", "SRT 字幕导出", "全部样式模板"],
     cta: "免费开始",
     highlighted: false,
@@ -115,7 +117,7 @@ export default function HomePage() {
               </a>
             </div>
             <p className="mt-4 text-sm text-neutral-500">
-              注册即送 30 分钟额度 · 免费体验
+              注册即送 {formatSecondsLabel(SIGNUP_BONUS_SECONDS)}额度 · 免费体验
             </p>
           </div>
         </section>

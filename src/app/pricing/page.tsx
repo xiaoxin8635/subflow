@@ -10,7 +10,8 @@ import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { ADDON_PACKAGES } from "@/lib/constants";
+import { ADDON_PACKAGES, SIGNUP_BONUS_SECONDS } from "@/lib/constants";
+import { formatSecondsLabel } from "@/lib/format";
 import { SiteHeader } from "@/components/site-header";
 
 // 读取数据库套餐（动态渲染声明，Cache Components 下必须显式）
@@ -65,6 +66,8 @@ export default async function PricingPage() {
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {plans.map((p, i) => {
             const featured = plans.length === 3 && i === 1;
+            // 免费档（¥0）：不是订阅——展示注册赠送额度，CTA 引导注册而非扫码付款
+            const isFree = p.priceCents === 0;
             return (
               <div
                 key={p.id}
@@ -83,11 +86,14 @@ export default async function PricingPage() {
                 )}
                 <p className="mt-4">
                   <span className="text-4xl font-bold">¥{yuan(p.priceCents)}</span>
-                  <span className="text-neutral-500"> /月</span>
+                  {!isFree && <span className="text-neutral-500"> /月</span>}
                 </p>
                 <ul className="mt-6 space-y-2 text-sm text-neutral-600">
                   <li className="flex items-center gap-2">
-                    <span className="text-brand">✓</span>每月 {formatSeconds(p.monthlySeconds)} 转写额度
+                    <span className="text-brand">✓</span>
+                    {isFree
+                      ? `注册即得 ${formatSecondsLabel(SIGNUP_BONUS_SECONDS)}额度`
+                      : `每月 ${formatSeconds(p.monthlySeconds)} 转写额度`}
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="text-brand">✓</span>AI 润色 + 关键词高亮
@@ -96,17 +102,26 @@ export default async function PricingPage() {
                     <span className="text-brand">✓</span>高清成片导出
                   </li>
                 </ul>
-                {/* CTA：锚到页面底部付款区（MVP 激活码模式无在线支付） */}
-                <a
-                  href="#pay"
-                  className={`mt-8 block rounded-xl py-2.5 text-center text-sm font-medium transition-colors ${
-                    featured
-                      ? "bg-brand text-white hover:bg-brand-strong"
-                      : "border border-brand/30 bg-brand-soft text-brand hover:bg-brand/10"
-                  }`}
-                >
-                  扫码购买
-                </a>
+                {/* CTA：免费档引导注册；付费档锚到页面底部付款区（MVP 激活码模式无在线支付） */}
+                {isFree ? (
+                  <Link
+                    href="/login"
+                    className="mt-8 block rounded-xl border border-brand/30 bg-brand-soft py-2.5 text-center text-sm font-medium text-brand transition-colors hover:bg-brand/10 motion-reduce:transition-none"
+                  >
+                    免费注册
+                  </Link>
+                ) : (
+                  <a
+                    href="#pay"
+                    className={`mt-8 block rounded-xl py-2.5 text-center text-sm font-medium transition-colors ${
+                      featured
+                        ? "bg-brand text-white hover:bg-brand-strong"
+                        : "border border-brand/30 bg-brand-soft text-brand hover:bg-brand/10"
+                    }`}
+                  >
+                    扫码购买
+                  </a>
+                )}
               </div>
             );
           })}
