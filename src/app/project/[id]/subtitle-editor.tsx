@@ -653,14 +653,14 @@ export function SubtitleEditor({
         <button
           type="button"
           onClick={() => setDrawer("translate")}
-          className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-brand hover:text-brand"
+          className="rounded-xl border border-brand/40 bg-white px-4 py-2 text-sm font-medium text-brand transition-colors hover:bg-brand-soft"
         >
           字幕翻译
         </button>
         <button
           type="button"
           onClick={() => setDrawer("export")}
-          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none"
+          className="rounded-xl bg-gradient-to-r from-coral to-coral-strong px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#c94826] transition-all duration-150 hover:-translate-y-px hover:shadow-[0_3px_0_0_#c94826] active:translate-y-px active:shadow-none"
         >
           导出成片
         </button>
@@ -993,7 +993,7 @@ export function SubtitleEditor({
                           type="button"
                           onClick={() => void handleSaveAsTemplate()}
                           disabled={savingTpl || !saveName.trim()}
-                          className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+                          className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-[0_2px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#0f766e] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
                         >
                           {savingTpl ? "保存中…" : "保存"}
                         </button>
@@ -1072,14 +1072,14 @@ export function SubtitleEditor({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+              className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-[0_2px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#0f766e] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
             >
               {saving ? "保存中…" : "保存修改"}
             </button>
           ) : (
             <span
               role="status"
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-brand-soft px-2.5 py-1.5 text-xs font-medium text-brand"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden>
                 <path d="M20 6 9 17l-5-5" />
@@ -1289,7 +1289,7 @@ export function SubtitleEditor({
                       <span className="flex-1" />
                       <button
                         onClick={() => setEditingIdx(null)}
-                        className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none"
+                        className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white shadow-[0_2px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#0f766e] active:translate-y-px active:shadow-none"
                       >
                         完成
                       </button>

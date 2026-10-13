@@ -100,7 +100,7 @@ export function RedeemForm({ balanceSeconds }: { balanceSeconds: number }) {
           <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
         )}
         {success && (
-          <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-strong">
             <p className="font-medium">
               兑换成功！{success.planName ? `「${success.planName}」套餐已开通，` : ""}
               到账 {formatSeconds(success.addedSeconds)}
@@ -112,7 +112,7 @@ export function RedeemForm({ balanceSeconds }: { balanceSeconds: number }) {
         <button
           type="submit"
           disabled={submitting || !code.trim()}
-          className="w-full rounded-xl bg-brand px-5 py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+          className="w-full rounded-2xl bg-gradient-to-r from-brand to-brand-strong px-5 py-3 font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
         >
           {submitting ? "兑换中…" : "立即兑换"}
         </button>

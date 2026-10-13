@@ -105,19 +105,27 @@ export function TranslateCard({
   const selectedLabel = langLabelOf(selected);
   const estimate = translateCostSeconds(Math.max(charCount, 1));
 
-  const chipActive = "border-brand bg-brand/5 text-brand";
-  const chipIdle = "border-black/10 text-neutral-600 hover:border-black/20";
+  // 语言两行分组（brief 信息架构）：外语一行 + 繁体中文单独一行
+  const mainLangs = TRANSLATE_LANGUAGES.filter((l) => l.code !== "zh-TW");
+  const extraLang = TRANSLATE_LANGUAGES.find((l) => l.code === "zh-TW");
+
+  /** 选中/未选中 chip 配色：选中青绿填充白字，未选中浅灰描边深灰字 */
+  const chipActive = "border-brand bg-brand text-white font-medium";
+  const chipIdle = "border-black/10 text-neutral-600 hover:border-brand/40 hover:text-brand";
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
-      <p className="text-xs text-neutral-400">按源字幕字数计费：每 1000 字 60 秒额度，最低 60 秒</p>
-      <p className="mt-1 text-sm text-neutral-500">
-        将整份字幕翻译为目标语言，生成新的字幕文件（时间轴与原文逐行对齐）。
-      </p>
+    <div>
+      {/* 计费说明：浅青绿圆角提示块 */}
+      <div className="rounded-xl bg-brand-soft px-4 py-3">
+        <p className="text-xs font-medium text-brand-strong">按源字幕字数计费：每 1000 字 60 秒额度，最低 60 秒</p>
+        <p className="mt-1 text-xs text-neutral-500">
+          将整份字幕翻译为目标语言，生成新的字幕文件（时间轴与原文逐行对齐）。
+        </p>
+      </div>
 
-      {/* 语言选择 */}
+      {/* 语言选择：第一行外语，第二行繁体中文（选中青绿填充 + 白字） */}
       <div className="mt-4 flex flex-wrap gap-2">
-        {TRANSLATE_LANGUAGES.map((l) => (
+        {mainLangs.map((l) => (
           <button
             key={l.code}
             type="button"
@@ -130,9 +138,22 @@ export function TranslateCard({
           </button>
         ))}
       </div>
+      {extraLang && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelected(extraLang.code)}
+            className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+              selected === extraLang.code ? chipActive : chipIdle
+            }`}
+          >
+            {extraLang.label}
+          </button>
+        </div>
+      )}
 
-      {/* 翻译风格（P2.11）：随任务快照存储，重新翻译可换风格 */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      {/* 翻译风格（P2.11）：随任务快照存储，重新翻译可换风格（选中态与语言 chips 同款） */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-sm text-neutral-500">风格</span>
         {TRANSLATE_STYLES.map((s) => (
           <button
@@ -149,17 +170,20 @@ export function TranslateCard({
         ))}
       </div>
 
-      {/* 发起翻译 */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-neutral-50 px-4 py-3">
-        <p className="text-sm text-neutral-600">
-          翻译为{selectedLabel} · 预计消耗约 <span className="font-medium text-neutral-800">{estimate}</span> 秒额度
-          （以下单时实际字数为准）
-        </p>
+      {/* 额度预估：浅灰底提示条（额度数字珊瑚橙强调） */}
+      <p className="mt-4 rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-600">
+        翻译为{selectedLabel} · 预计消耗约{" "}
+        <span className="font-semibold text-coral">{estimate}</span> 秒额度
+        （以下单时实际字数为准）
+      </p>
+
+      {/* 发起翻译：青绿渐变主按钮（左下角，饱满按压质感） */}
+      <div className="mt-3">
         <button
           type="button"
           disabled={starting}
           onClick={() => void start(selected)}
-          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+          className="rounded-xl bg-gradient-to-r from-brand to-brand-strong px-5 py-2.5 text-sm font-medium text-white shadow-[0_2px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-px hover:shadow-[0_3px_0_0_#0f766e] active:translate-y-px active:shadow-none disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
         >
           {starting ? "提交中…" : "开始翻译"}
         </button>

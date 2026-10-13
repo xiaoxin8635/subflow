@@ -1,12 +1,12 @@
 "use client";
 /**
  * @file 登录页（手机号 + 短信验证码，支持邀请码）——左右分栏版式
- * @description 桌面端（≥lg）左侧为产品舞台：一个迷你播放器 mock（深色视频帧上
- *               字幕逐句浮现、关键词品牌色高亮，下方波形条呼应编辑器音轨），
- *               纯 CSS 动画、尊重 prefers-reduced-motion；右侧为登录卡。
- *               移动端只保留顶部 Logo 行 + 登录卡。表单逻辑：手机号格式校验、
- *               验证码 60 秒倒计时、提交登录；邀请链接（/login?ref=CODE）自动
- *               填充邀请码，仅新用户注册时生效。
+ * @description 桌面端（≥lg）左侧为产品舞台：一个迷你播放器 mock（青蓝紫柔和
+ *               渐变视频帧上字幕逐句浮现、关键词品牌色高亮，下方声波条做起伏
+ *               动画呼应编辑器音轨），纯 CSS 动画、尊重 prefers-reduced-motion；
+ *               右侧为登录卡。移动端只保留顶部 Logo 行 + 登录卡。表单逻辑：
+ *               手机号格式校验、验证码 60 秒倒计时、邀请码默认收起（?ref=CODE
+ *               链接进入时自动展开填充）、提交登录；仅新用户注册时生效。
  *               依赖 API：POST /api/auth/sms（发码）、POST /api/auth/login（登录）。
  */
 
@@ -70,6 +70,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [sending, setSending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -82,11 +83,14 @@ export default function LoginPage() {
   /** 邀请码选填：空值合法，非空须匹配字符集 */
   const inviteValid = inviteCode === "" || INVITE_CODE_RE.test(inviteCode.toUpperCase());
 
-  // 邀请链接 ?ref=CODE 自动填充（微任务包裹：避免 effect 内同步 setState 触发 eslint 规则）
+  // 邀请链接 ?ref=CODE 自动填充并展开邀请码输入（微任务包裹：避免 effect 内同步 setState 触发 eslint 规则）
   useEffect(() => {
     void Promise.resolve().then(() => {
       const ref = new URLSearchParams(window.location.search).get("ref");
-      if (ref) setInviteCode(ref.trim().toUpperCase());
+      if (ref) {
+        setInviteCode(ref.trim().toUpperCase());
+        setInviteOpen(true);
+      }
     });
   }, []);
 
@@ -141,7 +145,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.1fr_1fr]">
       {/* ============ 左侧产品舞台（桌面端） ============ */}
-      <aside className="hidden flex-col bg-[linear-gradient(180deg,#eef2ff_0%,#fafafa_100%)] p-10 lg:flex xl:p-14">
+      <aside className="hidden flex-col bg-[linear-gradient(180deg,#f0fdfa_0%,#fafafa_100%)] p-10 lg:flex xl:p-14">
         {/* Logo（链接回首页） */}
         <Link href="/" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-sm font-bold text-white">
@@ -158,12 +162,12 @@ export default function LoginPage() {
           <h2 className="text-3xl font-semibold leading-tight tracking-tight xl:text-4xl">
             上传一段视频，
             <br />
-            拿回一套能直接用的字幕。
+            拿回一套能直接用的字幕
           </h2>
 
           {/* 迷你播放器 mock：字幕逐句浮现（产品核心产出的直观预览） */}
-          <div className="mt-8 max-w-lg overflow-hidden rounded-2xl shadow-[0_24px_60px_-18px_rgba(79,70,229,0.35)]">
-            <div className="relative aspect-video bg-[linear-gradient(135deg,#1e1b4b_0%,#3730a3_55%,#6366f1_130%)]">
+          <div className="mt-8 max-w-lg overflow-hidden rounded-2xl shadow-[0_24px_60px_-18px_rgba(13,148,136,0.35)]">
+            <div className="relative aspect-video bg-[linear-gradient(135deg,#3730a3_0%,#6366f1_55%,#14b8a6_130%)]">
               {/* 播放按钮（静态装饰，中央半透明圆钮） */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/30 bg-white/10 backdrop-blur-sm">
@@ -182,7 +186,7 @@ export default function LoginPage() {
                     >
                       <span>
                         {c.before}
-                        <span className="font-medium text-indigo-300">{c.kw}</span>
+                        <span className="font-medium text-teal-300">{c.kw}</span>
                         {c.after}
                       </span>
                     </p>
@@ -196,13 +200,13 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* 波形条（呼应编辑器音轨；前段品牌色 = 已播放染色） */}
+          {/* 波形条（呼应编辑器音轨；前段品牌色 = 已播放染色，整体做声波起伏动画） */}
           <div className="mt-5 flex h-10 max-w-lg items-center gap-[3px]" aria-hidden>
             {WAVE_BARS.map((v, i) => (
               <span
                 key={i}
-                className={`w-1 rounded-full ${i < WAVE_PLAYED ? "bg-brand" : "bg-indigo-200"}`}
-                style={{ height: `${v}%` }}
+                className={`login-wave w-1 rounded-full ${i < WAVE_PLAYED ? "bg-brand" : "bg-teal-200"}`}
+                style={{ height: `${v}%`, animationDelay: `${(i % 10) * 0.14}s` }}
               />
             ))}
           </div>
@@ -211,7 +215,7 @@ export default function LoginPage() {
           <ul className="mt-8 max-w-lg space-y-4">
             {VALUE_PROPS.map((p) => (
               <li key={p.title} className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-indigo-100 bg-white text-brand">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
                   {p.icon}
                 </span>
                 <span>
@@ -240,10 +244,11 @@ export default function LoginPage() {
           </span>
         </Link>
 
-        <div className="w-full max-w-sm rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
+        <div className="w-full max-w-sm rounded-2xl border border-black/5 bg-white p-8 shadow-[0_12px_40px_-12px_rgba(15,60,52,0.14)]">
           <h1 className="text-2xl font-bold tracking-tight">登录 / 注册</h1>
           <p className="mt-2 text-sm text-neutral-500">
-            未注册的手机号将自动创建账号，并获得 30 分钟免费额度
+            未注册的手机号将自动创建账号，并获得{" "}
+            <span className="font-medium text-coral">30 分钟免费额度</span>
           </p>
 
           <form onSubmit={handleLogin} className="mt-8 space-y-4">
@@ -260,7 +265,7 @@ export default function LoginPage() {
                 placeholder="请输入手机号"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-                className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 outline-none transition-colors focus:border-brand"
+                className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 outline-none transition-colors focus:border-brand focus:bg-white"
               />
             </div>
 
@@ -278,41 +283,65 @@ export default function LoginPage() {
                   placeholder="6 位验证码"
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 outline-none transition-colors focus:border-brand"
+                  className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 outline-none transition-colors focus:border-brand focus:bg-white"
                 />
                 <button
                   type="button"
                   onClick={handleSendCode}
                   disabled={!phoneValid || countdown > 0 || sending}
-                  className="shrink-0 rounded-xl border border-brand/30 bg-brand-soft px-4 text-sm font-medium text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="shrink-0 rounded-xl border border-brand bg-white px-4 text-sm font-medium text-brand transition-colors hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {countdown > 0 ? `${countdown}s` : sending ? "发送中…" : "获取验证码"}
                 </button>
               </div>
             </div>
 
-            {/* 邀请码（选填，仅新用户注册时生效） */}
+            {/* 邀请码（选填，默认收起；?ref=CODE 链接进入时自动展开填充） */}
             <div>
-              <label htmlFor="invite" className="mb-1.5 block text-sm font-medium">
-                邀请码 <span className="font-normal text-neutral-400">（选填）</span>
-              </label>
-              <input
-                id="invite"
-                type="text"
-                maxLength={8}
-                placeholder="好友邀请码，双方各得额外额度"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                className={`w-full rounded-xl border px-4 py-2.5 outline-none transition-colors focus:border-brand ${
-                  inviteValid ? "border-neutral-200" : "border-red-300"
-                }`}
-              />
+              {inviteOpen ? (
+                <>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label htmlFor="invite" className="block text-sm font-medium">
+                      邀请码 <span className="font-normal text-neutral-400">（选填）</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setInviteOpen(false)}
+                      className={`text-xs text-neutral-400 transition-colors hover:text-neutral-600 ${inviteCode ? "invisible" : ""}`}
+                    >
+                      收起
+                    </button>
+                  </div>
+                  <input
+                    id="invite"
+                    type="text"
+                    maxLength={8}
+                    placeholder="好友邀请码，双方各得额外额度"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                    className={`w-full rounded-xl border bg-neutral-50 px-4 py-2.5 outline-none transition-colors focus:border-brand focus:bg-white ${
+                      inviteValid ? "border-neutral-200" : "border-red-300"
+                    }`}
+                  />
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setInviteOpen(true)}
+                  className="flex w-full items-center gap-1.5 text-sm text-neutral-400 transition-colors hover:text-brand"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  填写邀请码，双方各得额外额度
+                </button>
+              )}
             </div>
 
             {/* 提示信息 */}
             {message && (
               <p
-                className={`text-sm ${message.type === "error" ? "text-red-600" : "text-green-600"}`}
+                className={`text-sm ${message.type === "error" ? "text-red-600" : "text-brand-strong"}`}
               >
                 {message.text}
               </p>
@@ -322,7 +351,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={!phoneValid || code.length !== 6 || !inviteValid || submitting}
-              className="w-full rounded-xl bg-brand py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+              className="w-full rounded-xl bg-gradient-to-r from-brand to-brand-strong py-3 font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
             >
               {submitting ? "登录中…" : "登录"}
             </button>

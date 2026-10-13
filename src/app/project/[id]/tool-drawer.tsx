@@ -55,14 +55,14 @@ export function ToolDrawer({
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
-      {/* 面板：右侧滑入 */}
+      {/* 面板：右侧滑入（左侧大圆角 + 柔和弥散投影） */}
       <div
-        className={`absolute inset-y-0 right-0 flex w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
+        className={`absolute inset-y-0 right-0 flex w-full max-w-lg flex-col rounded-l-3xl bg-white shadow-[0_0_60px_-15px_rgba(16,60,52,0.35)] transition-transform duration-300 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-5 py-4">
-          <h2 className="text-base font-semibold">{title}</h2>
+          <h2 className="text-lg font-bold">{title}</h2>
           <button
             ref={closeRef}
             type="button"

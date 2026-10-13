@@ -54,7 +54,7 @@ export default async function PricingPage() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-soft via-white to-brand-soft/60">
       <SiteHeader />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12">
         <h1 className="text-center text-3xl font-bold tracking-tight">购买额度</h1>
@@ -71,12 +71,14 @@ export default async function PricingPage() {
             return (
               <div
                 key={p.id}
-                className={`relative rounded-2xl border bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                  featured ? "border-brand/40 ring-1 ring-brand/20" : "border-black/5"
+                className={`relative rounded-2xl border bg-white p-8 transition-all duration-200 hover:-translate-y-1 motion-reduce:transition-none ${
+                  featured
+                    ? "border-brand/50 shadow-[0_12px_40px_-12px_rgba(13,148,136,0.28)] ring-1 ring-brand/20 hover:shadow-[0_18px_48px_-12px_rgba(13,148,136,0.38)]"
+                    : "border-black/5 shadow-[0_6px_24px_-12px_rgba(15,60,52,0.12)] hover:shadow-[0_12px_32px_-12px_rgba(15,60,52,0.18)]"
                 }`}
               >
                 {featured && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-brand px-3 py-0.5 text-xs font-medium text-white">
+                  <span className="absolute -top-3 left-6 rounded-full bg-coral px-3 py-0.5 text-xs font-medium text-white shadow-sm">
                     最受欢迎
                   </span>
                 )}
@@ -113,9 +115,9 @@ export default async function PricingPage() {
                 ) : (
                   <a
                     href="#pay"
-                    className={`mt-8 block rounded-xl py-2.5 text-center text-sm font-medium transition-colors ${
+                    className={`mt-8 block rounded-xl py-2.5 text-center text-sm font-medium transition-all duration-150 motion-reduce:transition-none ${
                       featured
-                        ? "bg-brand text-white hover:bg-brand-strong"
+                        ? "bg-gradient-to-r from-brand to-brand-strong text-white shadow-[0_4px_0_0_#0f766e] hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e]"
                         : "border border-brand/30 bg-brand-soft text-brand hover:bg-brand/10"
                     }`}
                   >
@@ -135,9 +137,9 @@ export default async function PricingPage() {
         {/* 一次性加油包（P2.8）：无需订阅，买多少用多少，用完可再购 */}
         <section className="mt-12">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-xl font-semibold">⚡ 加油包（一次性额度）</h2>
+            <h2 className="text-xl font-semibold">加油包 · 一次性额度</h2>
             <p className="text-sm text-neutral-500">
-              不想订阅？买多少用多少，额度永久有效，用完可再购
+              买多少用多少，额度永久有效，用完可再购
             </p>
           </div>
           <div className="mt-5 grid gap-6 md:grid-cols-3">
@@ -146,13 +148,15 @@ export default async function PricingPage() {
               return (
                 <div
                   key={pkg.id}
-                  className={`relative rounded-2xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                    i === 1 ? "border-brand/40 ring-1 ring-brand/20" : "border-black/5"
+                  className={`relative rounded-2xl border bg-white p-6 transition-all duration-200 hover:-translate-y-1 motion-reduce:transition-none ${
+                    i === 1
+                      ? "border-brand/50 shadow-[0_12px_40px_-12px_rgba(13,148,136,0.28)] ring-1 ring-brand/20 hover:shadow-[0_18px_48px_-12px_rgba(13,148,136,0.38)]"
+                      : "border-black/5 shadow-[0_6px_24px_-12px_rgba(15,60,52,0.12)] hover:shadow-[0_12px_32px_-12px_rgba(15,60,52,0.18)]"
                   }`}
                 >
                   {i === 1 && (
-                    <span className="absolute -top-3 left-6 rounded-full bg-brand px-3 py-0.5 text-xs font-medium text-white">
-                      最受欢迎
+                    <span className="absolute -top-3 left-6 rounded-full bg-coral px-3 py-0.5 text-xs font-medium text-white shadow-sm">
+                      超值推荐
                     </span>
                   )}
                   <h3 className="font-semibold">{pkg.name}</h3>
@@ -173,23 +177,32 @@ export default async function PricingPage() {
         </section>
 
         {/* 购买流程（id 供套餐卡 CTA 锚点滚动） */}
-        <section id="pay" className="mt-12 scroll-mt-20 rounded-2xl border border-black/5 bg-white p-8 shadow-sm">
+        <section id="pay" className="mt-12 scroll-mt-20 rounded-2xl border border-black/5 bg-white p-8 shadow-[0_6px_24px_-12px_rgba(15,60,52,0.12)]">
           <h2 className="text-lg font-semibold">购买流程（三步到账）</h2>
           <ol className="mt-6 grid gap-6 md:grid-cols-3">
             <li>
-              <p className="text-sm font-medium text-brand">① 扫码付款</p>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
+                1
+              </span>
+              <p className="mt-3 text-sm font-medium">扫码付款</p>
               <p className="mt-1 text-sm text-neutral-600">
                 扫下方收款码，按套餐或加油包价格付款，备注您的手机号后 4 位
               </p>
             </li>
             <li>
-              <p className="text-sm font-medium text-brand">② 获取激活码</p>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
+                2
+              </span>
+              <p className="mt-3 text-sm font-medium">获取激活码</p>
               <p className="mt-1 text-sm text-neutral-600">
                 客服核对到账后，将激活码发送到您的手机（短信/微信）
               </p>
             </li>
             <li>
-              <p className="text-sm font-medium text-brand">③ 兑换到账</p>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
+                3
+              </span>
+              <p className="mt-3 text-sm font-medium">兑换到账</p>
               <p className="mt-1 text-sm text-neutral-600">
                 在工作台「兑换额度」输入激活码，额度立即到账
               </p>
@@ -228,7 +241,7 @@ export default async function PricingPage() {
           <div className="mt-8 text-center">
             <Link
               href="/dashboard/redeem"
-              className="inline-block rounded-xl bg-brand px-8 py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca]"
+              className="inline-block rounded-xl bg-brand px-8 py-3 font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e]"
             >
               已购？去兑换激活码
             </Link>

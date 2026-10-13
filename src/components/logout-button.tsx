@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_ROUTES } from "@/lib/constants";
 
-/** 退出登录按钮（侧边栏底部：整行左对齐样式） */
+/** 退出登录按钮（侧边栏底部毛玻璃卡片内最下方：整行左对齐样式） */
 export function LogoutButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -30,7 +30,7 @@ export function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={busy}
-      className="w-full rounded-lg px-3 py-2 text-left text-sm text-neutral-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
+      className="w-full rounded-lg px-1 py-2 text-left text-sm text-neutral-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
     >
       {busy ? "退出中…" : "退出登录"}
     </button>

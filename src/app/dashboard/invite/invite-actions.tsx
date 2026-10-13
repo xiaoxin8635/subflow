@@ -30,7 +30,7 @@ export function InviteActions({ inviteCode }: { inviteCode: string }) {
       <button
         type="button"
         onClick={() => void copy(`${window.location.origin}/login?ref=${inviteCode}`, "link")}
-        className="rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca]"
+        className="rounded-xl bg-gradient-to-r from-brand to-brand-strong px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e]"
       >
         {copied === "link" ? "已复制链接 ✓" : "复制邀请链接"}
       </button>

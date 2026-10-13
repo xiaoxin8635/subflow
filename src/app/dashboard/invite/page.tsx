@@ -49,15 +49,12 @@ export default async function InvitePage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-10">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">邀请好友</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            把邀请码分享给朋友，注册时填写即可双方得额度
-          </p>
-        </div>
-        <BackLink href="/dashboard" label="返回工作台" />
-      </div>
+      <BackLink href="/dashboard" label="返回工作台" />
+
+      <h1 className="mt-4 text-2xl font-bold tracking-tight">邀请好友</h1>
+      <p className="mt-1 text-sm text-neutral-500">
+        把邀请码分享给朋友，注册时填写即可双方得额度
+      </p>
 
       {/* 我的邀请码 */}
       <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
@@ -77,14 +74,14 @@ export default async function InvitePage() {
         </div>
       </div>
 
-      {/* 累计统计 */}
+      {/* 累计统计（核心数字珊瑚橙强调，与全站双色体系一致） */}
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
-          <p className="text-2xl font-bold">{invitedCount}</p>
+          <p className="text-2xl font-bold text-coral">{invitedCount}</p>
           <p className="mt-1 text-sm text-neutral-500">已邀请好友</p>
         </div>
         <div className="rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
-          <p className="text-2xl font-bold text-brand">{formatBonus(totalReward)}</p>
+          <p className="text-2xl font-bold text-coral">{formatBonus(totalReward)}</p>
           <p className="mt-1 text-sm text-neutral-500">累计获得奖励</p>
         </div>
       </div>

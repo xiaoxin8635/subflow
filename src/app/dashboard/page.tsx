@@ -112,31 +112,31 @@ export default async function DashboardPage({
         </div>
         <Link
           href="/dashboard/new"
-          className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
+          className="rounded-lg bg-gradient-to-r from-brand to-brand-strong px-4 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
         >
           新建项目
         </Link>
       </div>
 
-      {/* 内联统计条：数字即界面，不做卡片（累计时长不区分筛选，余额直达兑换） */}
+      {/* 内联统计条：数字即界面，不做卡片；青绿标记累计产出、珊瑚橙强调余额（钱相关醒目促兑换） */}
       <div className="mt-6 flex flex-wrap items-end gap-x-10 gap-y-4">
         <div>
           <p className="text-2xl font-semibold tabular-nums leading-none">{counts.all}</p>
           <p className="mt-1.5 text-xs text-neutral-400">个项目</p>
         </div>
         <div className="border-l border-neutral-200 pl-10">
-          <p className="text-2xl font-semibold tabular-nums leading-none">{formatSecondsLabel(totalDuration)}</p>
+          <p className="text-2xl font-semibold tabular-nums leading-none text-teal-600">{formatSecondsLabel(totalDuration)}</p>
           <p className="mt-1.5 text-xs text-neutral-400">累计转写</p>
         </div>
         <div className="border-l border-neutral-200 pl-10">
-          <p className="text-2xl font-semibold tabular-nums leading-none text-brand">
+          <p className="text-2xl font-semibold tabular-nums leading-none text-coral">
             {formatSecondsLabel(user.balanceSeconds)}
           </p>
           <p className="mt-1.5 flex items-center gap-2 text-xs text-neutral-400">
             剩余额度
             <Link
               href="/dashboard/redeem"
-              className="rounded-full bg-brand-soft px-2 py-0.5 font-medium text-brand transition-colors hover:bg-brand hover:text-white motion-reduce:transition-none"
+              className="rounded-full bg-coral-soft px-2 py-0.5 font-medium text-coral-strong transition-colors hover:bg-coral hover:text-white motion-reduce:transition-none"
             >
               兑换
             </Link>
@@ -154,7 +154,7 @@ export default async function DashboardPage({
         <div className="mt-8">
           {counts.all === 0 ? (
             // 从未有过项目：引导上传
-            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 text-center">
+            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-200 text-center">
               <div className="empty-float">
                 <FolderEmpty3D size="lg" />
               </div>
@@ -162,7 +162,7 @@ export default async function DashboardPage({
               <p className="mt-1 text-sm text-neutral-500">上传第一个视频，AI 自动生成字幕</p>
               <Link
                 href="/dashboard/new"
-                className="mt-5 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca]"
+                className="mt-5 rounded-lg bg-gradient-to-r from-brand to-brand-strong px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e]"
               >
                 新建项目
               </Link>
@@ -189,7 +189,7 @@ export default async function DashboardPage({
             <li key={p.id}>
               <Link
                 href={`/project/${p.id}`}
-                className="group flex gap-4 rounded-xl border border-neutral-200/80 bg-white p-3 transition-all hover:border-brand/40 hover:shadow-md motion-reduce:transition-none"
+                className="group flex gap-4 rounded-2xl border border-neutral-200/60 bg-white p-3.5 shadow-[0_1px_2px_rgba(16,60,52,0.04)] transition-all hover:border-brand/30 hover:shadow-[0_12px_28px_-14px_rgba(13,148,136,0.28)] motion-reduce:transition-none"
               >
                 {/* 封面（监视器一帧 / 占位 + 扫描线 + 时长角标） */}
                 <div className="w-28 shrink-0 sm:w-44">

@@ -12,7 +12,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { transcribeQueuePosition } from "@/lib/queue/queues";
 import { AppShell } from "@/components/app-shell";
-import { BackLink } from "@/components/back-link";
 import { ProjectLiveView } from "./project-live-view";
 
 // 登录态页面：读取 cookie + 数据库，按需阻塞渲染（Cache Components 下必须显式声明）
@@ -34,7 +33,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <AppShell phone={user.phone} balanceSeconds={user.balanceSeconds}>
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        <BackLink href="/dashboard" label="返回项目列表" />
         <ProjectLiveView
           projectId={project.id}
           initial={{

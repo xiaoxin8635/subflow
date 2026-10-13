@@ -159,7 +159,7 @@ function useOptimisticActiveKey() {
 }
 
 /**
- * 桌面侧边栏导航（≥lg，竖向）：渐变底 + 左缘发光指示条整体平滑平移
+ * 桌面侧边栏导航（≥lg，竖向）：青绿胶囊高亮层整体平滑平移
  */
 export function SideNav() {
   const { activeKey, onNavigate } = useOptimisticActiveKey();
@@ -168,17 +168,14 @@ export function SideNav() {
 
   return (
     <nav ref={navRef} className="relative flex-1 space-y-0.5 px-3" aria-label="主导航">
-      {/* 滑动高亮层：水合后接管导航项自持高亮；pointer-events-none 防止挡住下层交互 */}
+      {/* 滑动高亮层：青绿胶囊（渐变底 + 柔和投影）水合后接管导航项自持高亮；
+          pointer-events-none 防止挡住下层交互 */}
       {ready && box && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-3 rounded-lg bg-gradient-to-r from-brand/25 to-brand/5 transition-[top] duration-300 ease-out motion-reduce:transition-none"
+          className="pointer-events-none absolute inset-x-3 rounded-full bg-gradient-to-r from-brand to-brand-strong shadow-[0_4px_14px_-4px_rgba(13,148,136,0.55)] transition-[top] duration-300 ease-out motion-reduce:transition-none"
           style={{ top: box.top, height: box.height }}
-        >
-          <span
-            className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand shadow-[0_0_8px_2px_rgba(79,70,229,0.55)]"
-          />
-        </div>
+        />
       )}
       {NAV_ITEMS.map((item, i) => {
         const isActive = item.key === activeKey;
@@ -191,27 +188,20 @@ export function SideNav() {
             href={item.href}
             onClick={() => onNavigate(item.key)}
             aria-current={isActive ? "page" : undefined}
-            className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150 ${
+            className={`group relative flex items-center gap-2.5 rounded-full px-3 py-2 text-sm transition-colors duration-150 ${
               isActive
                 ? ready
                   ? "font-medium text-white"
-                  : "bg-gradient-to-r from-brand/25 to-brand/5 font-medium text-white"
-                : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                  : "bg-gradient-to-r from-brand to-brand-strong font-medium text-white shadow-[0_4px_14px_-4px_rgba(13,148,136,0.55)]"
+                : "text-teal-100/60 hover:bg-white/5 hover:text-white"
             }`}
           >
-            {/* 未水合阶段的临时指示条（SSR 直出）；水合后由滑动层渲染 */}
-            {isActive && !ready && (
-              <span
-                aria-hidden
-                className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand shadow-[0_0_8px_2px_rgba(79,70,229,0.55)]"
-              />
-            )}
             <span
               aria-hidden
               className={`transition-all duration-150 group-hover:translate-x-0.5 ${
                 isActive
-                  ? "text-indigo-300"
-                  : "text-neutral-500 group-hover:text-neutral-300"
+                  ? "text-teal-300"
+                  : "text-teal-100/40 group-hover:text-teal-100/80"
               }`}
             >
               <NavIcon paths={NAV_ICONS[item.key]} />
@@ -239,11 +229,11 @@ export function MobileNavTabs({ children }: { children?: React.ReactNode }) {
       className="relative flex gap-1 overflow-x-auto px-3 pb-2 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="主导航"
     >
-      {/* 滑动高亮层：absolute 在滚动容器内随内容横滚，测量值与滚动坐标系一致 */}
+      {/* 滑动高亮层：青绿胶囊，absolute 在滚动容器内随内容横滚，测量值与滚动坐标系一致 */}
       {ready && box && (
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-lg bg-brand/20 transition-[left,top,width] duration-300 ease-out motion-reduce:transition-none"
+          className="pointer-events-none absolute rounded-full bg-gradient-to-r from-brand to-brand-strong shadow-[0_4px_14px_-4px_rgba(13,148,136,0.55)] transition-[left,top,width] duration-300 ease-out motion-reduce:transition-none"
           style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
         />
       )}
@@ -258,17 +248,17 @@ export function MobileNavTabs({ children }: { children?: React.ReactNode }) {
             href={item.href}
             onClick={() => onNavigate(item.key)}
             aria-current={isActive ? "page" : undefined}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
               isActive
                 ? ready
                   ? "font-medium text-white"
-                  : "bg-brand/20 font-medium text-white"
-                : "text-neutral-400 hover:text-white"
+                  : "bg-brand font-medium text-white"
+                : "text-teal-100/60 hover:text-white"
             }`}
           >
             <span
               aria-hidden
-              className={isActive ? "text-indigo-300" : "text-neutral-500"}
+              className={isActive ? "text-teal-300" : "text-teal-100/40"}
             >
               <NavIcon paths={NAV_ICONS[item.key]} />
             </span>

@@ -334,7 +334,7 @@ export function ExportCard({
   );
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+    <div>
       {mediaKind === "audio" ? (
         /* 纯音频项目：无烧录语义，提供片段裁剪导出（纯裁剪输出 mp3） */
         <div>
@@ -351,7 +351,7 @@ export function ExportCard({
             {phase === "done" && taskId ? (
               <a
                 href={`/api/exports/${taskId}/download`}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                className="rounded-xl bg-coral px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#c94826] transition-all duration-150 hover:-translate-y-px hover:bg-coral-strong hover:shadow-[0_3px_0_0_#c94826] active:translate-y-px active:shadow-none"
               >
                 ⬇ 下载片段
               </a>
@@ -368,7 +368,7 @@ export function ExportCard({
                         ? "余额不足"
                         : undefined
                 }
-                className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+                className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#0f766e] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
               >
                 {phase === "submitting" ? "创建任务…" : phase === "processing" ? "裁剪中…" : "导出片段"}
               </button>
@@ -388,7 +388,7 @@ export function ExportCard({
           {phase === "done" && taskId ? (
             <a
               href={`/api/exports/${taskId}/download`}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+              className="rounded-xl bg-coral px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#c94826] transition-all duration-150 hover:-translate-y-px hover:bg-coral-strong hover:shadow-[0_3px_0_0_#c94826] active:translate-y-px active:shadow-none"
             >
               ⬇ 下载成片
             </a>
@@ -407,7 +407,7 @@ export function ExportCard({
                         ? "余额不足"
                         : undefined
               }
-              className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#4338ca] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+              className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white shadow-[0_2px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-px hover:bg-brand-strong hover:shadow-[0_3px_0_0_#0f766e] active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
             >
               {phase === "submitting" ? "创建任务…" : phase === "processing" ? "导出中…" : clipEnabled ? "导出片段" : "导出视频"}
             </button>

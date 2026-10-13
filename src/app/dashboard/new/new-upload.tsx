@@ -144,11 +144,11 @@ function WarnFileIcon() {
   );
 }
 
-/** 完成勾图标（文件行：上传完成，pop-in 动效） */
+/** 完成勾图标（文件行：上传完成，青绿勾 pop-in 动效） */
 function CheckBadgeIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pop-in h-5 w-5 shrink-0 text-emerald-600" aria-hidden>
-      <circle cx="12" cy="12" r="8.5" className="fill-emerald-50" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pop-in h-5 w-5 shrink-0 text-brand" aria-hidden>
+      <circle cx="12" cy="12" r="8.5" className="fill-brand-soft" />
       <path d="m8.5 12.2 2.4 2.4 4.6-5" />
     </svg>
   );
@@ -513,12 +513,12 @@ export function NewUploadClient() {
         把素材交给我们，几分钟后拿回能直接用的字幕
       </p>
 
-      {/* ============ 投料口：大拖放区（拖入时整块响应） ============ */}
+      {/* ============ 投料口：大拖放区（浅青绿柔底常驻，拖入时整块响应） ============ */}
       <label
         className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all duration-200 ${
           dragActive
             ? "border-brand bg-brand-soft shadow-inner"
-            : "border-neutral-300 bg-white hover:border-brand/50 hover:bg-brand-soft/40"
+            : "border-brand/30 bg-brand-soft/50 hover:border-brand/60 hover:bg-brand-soft"
         }`}
         onDragEnter={(e) => {
           e.preventDefault();
@@ -597,7 +597,7 @@ export function NewUploadClient() {
                     : r.status === "failed"
                       ? "border-red-200 bg-red-50/40"
                       : r.status === "done"
-                        ? "border-emerald-200/70"
+                        ? "border-brand/40 bg-brand-soft/40"
                         : "border-black/5"
                 }`}
               >
@@ -859,11 +859,11 @@ export function NewUploadClient() {
       {/* 批量结果汇总 */}
       {summary && <p className="mt-4 text-center text-sm text-amber-600">{summary}</p>}
 
-      {/* 提交按钮（实体按键感：底部硬阴影，hover 抬升 / 按下下沉；上传中内衬整体进度条） */}
+      {/* 提交按钮（通栏青绿渐变大圆角主按钮：底部硬阴影，hover 抬升 / 按下下沉；上传中内衬整体进度条） */}
       <button
         onClick={handleUpload}
         disabled={uploading || rows.length === 0 || hasInvalid || rows.every((r) => r.status === "done")}
-        className="relative mt-8 w-full overflow-hidden rounded-xl bg-brand py-3 font-medium text-white shadow-[0_4px_0_0_#4338ca] transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_6px_0_0_#4338ca] active:translate-y-0.5 active:shadow-[0_1px_0_0_#4338ca] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+        className="relative mt-8 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-brand to-brand-strong py-3.5 font-medium text-white shadow-[0_4px_0_0_#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#0f766e] active:translate-y-0.5 active:shadow-[0_1px_0_0_#0f766e] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
       >
         {uploading && (
           <span

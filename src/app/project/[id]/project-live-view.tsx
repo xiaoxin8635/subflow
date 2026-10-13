@@ -6,6 +6,7 @@
  *              READY 渲染字幕编辑器（批次①：翻译/导出收进编辑器顶部按钮唤起的抽屉）。
  */
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { ProjectStatus } from "@prisma/client";
 import { formatDuration, ProjectStatusBadge } from "@/components/project-status";
 import { ProjectCover } from "@/components/project-cover";
@@ -131,19 +132,33 @@ export function ProjectLiveView({
 
   return (
     <div className="mt-4">
-      {/* 标题与状态（字幕条徽章紧挨标题，剪辑台项目头语言） */}
+      {/* 标题行：返回箭头 + 文件名 + 状态徽章 + AI 润色徽章（剪辑台顶栏一行语言） */}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">{project.title}</h1>
+        <Link
+          href="/dashboard"
+          aria-label="返回项目列表"
+          title="返回项目列表"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 shadow-sm transition-all hover:border-brand/30 hover:text-brand"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+            aria-hidden
+          >
+            <path d="M19 12H5" />
+            <path d="m11 18-6-6 6-6" />
+          </svg>
+        </Link>
+        <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight">{project.title}</h1>
         <ProjectStatusBadge status={project.status} />
-      </div>
-      {/* 元信息：时长用平铺文字，润色状态用胶囊徽章（识别引擎技术名对创作者无意义，收进悬停提示） */}
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500">
-        {project.durationSec != null && (
-          <span>时长 {formatDuration(project.durationSec)}</span>
-        )}
-        {project.transcript?.llmPolished ? (
+        {project.transcript?.llmPolished && (
           <span
-            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600"
+            className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand"
             title={project.transcript.asrProvider ? `识别引擎 ${project.transcript.asrProvider}` : undefined}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden>
@@ -151,9 +166,14 @@ export function ProjectLiveView({
             </svg>
             AI 已润色
           </span>
-        ) : (
-          <span>未润色</span>
         )}
+      </div>
+      {/* 元信息：时长用平铺文字（润色状态已上移标题行；识别引擎技术名收进徽章悬停提示） */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500">
+        {project.durationSec != null && (
+          <span>时长 {formatDuration(project.durationSec)}</span>
+        )}
+        {!project.transcript?.llmPolished && <span>未润色</span>}
       </div>
 
       {/* 处理中：监视器占位（转写中封面带扫描线，与工作台列表同款母语）+ 状态行 */}

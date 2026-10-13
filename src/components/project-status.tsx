@@ -2,7 +2,8 @@
  * @file 项目状态徽章与时长格式化（前后端共用小组件/工具）
  * @description ProjectStatusBadge 将 ProjectStatus 枚举渲染为「字幕条」样式徽章
  *              （视频字幕的黑底白字小圆角条——本产品世界的视觉母题）：进行中三类
- *              用品牌色并带呼吸点（prefers-reduced-motion 时静止），完成用深色条，
+ *              用品牌青绿并带呼吸点（prefers-reduced-motion 时静止），完成用
+ *              珊瑚橙条（与青绿构成双色点缀体系，暖色传达「产出完成」），
  *              失败用红条。formatDuration 将秒数格式化为 mm:ss / hh:mm:ss。
  */
 import type { ProjectStatus } from "@prisma/client";
@@ -12,7 +13,7 @@ const STATUS_META: Record<ProjectStatus, { label: string; className: string; liv
   UPLOADED: { label: "排队中", className: "bg-neutral-500 text-white", live: false },
   TRANSCRIBING: { label: "转写中", className: "bg-brand text-white", live: true },
   POLISHING: { label: "AI 润色中", className: "bg-brand text-white", live: true },
-  READY: { label: "已完成", className: "bg-neutral-900 text-white", live: false },
+  READY: { label: "已完成", className: "bg-coral text-white", live: false },
   FAILED: { label: "失败", className: "bg-red-600 text-white", live: false },
 };
 
