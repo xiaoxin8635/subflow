@@ -12,7 +12,7 @@ import { redirect } from "next/navigation";
 import type { ProjectStatus } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatSecondsLabel } from "@/lib/format";
+import { formatSecondsLabel, formatRelativeTime } from "@/lib/format";
 import { AppShell } from "@/components/app-shell";
 import { ProjectStatusBadge } from "@/components/project-status";
 import { ProjectCover } from "@/components/project-cover";
@@ -204,15 +204,34 @@ export default async function DashboardPage({
                   </div>
                   <div className="min-w-0 flex-1 self-center">
                     <p className="truncate font-medium transition-colors group-hover:text-brand">{p.title}</p>
-                    <p className="mt-1 text-xs tabular-nums text-neutral-400">
-                      {new Date(p.updatedAt).toLocaleString("zh-CN", { hour12: false })}
+                    <p className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-400">
+                      <span aria-hidden className="inline-flex items-center text-neutral-400">
+                        {p.mediaKind === "audio" ? (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-3.5 w-3.5">
+                            <path d="M3 10v4M7 8v8M11 5v14M15 8v8M19 10v4" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                            <rect x="3" y="5" width="18" height="14" rx="2" />
+                            <path d="M10 9.5v5l4-2.5-4-2.5Z" />
+                          </svg>
+                        )}
+                      </span>
+                      {p.mediaKind === "audio" ? "音频" : "视频"}
                     </p>
                     {p.status === "FAILED" && p.error && (
                       <p className="mt-1.5 truncate text-xs text-red-500">失败原因：{p.error}</p>
                     )}
                   </div>
-                  <div className="self-center pr-1">
+                  <div className="flex flex-col items-end justify-center gap-1.5 self-center pr-1">
                     <ProjectStatusBadge status={p.status} />
+                    <time
+                      dateTime={new Date(p.updatedAt).toISOString()}
+                      title={new Date(p.updatedAt).toLocaleString("zh-CN", { hour12: false })}
+                      className="text-xs tabular-nums text-neutral-400"
+                    >
+                      {formatRelativeTime(new Date(p.updatedAt))}
+                    </time>
                   </div>
                 </Link>
               </li>
