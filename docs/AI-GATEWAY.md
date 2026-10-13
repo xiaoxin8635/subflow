@@ -1,6 +1,7 @@
 # SubFlow AI 网关（new-api）部署与运维手册
 
-> 版本：P2.24（2026-10-13，AI 调用接入 new-api 自托管网关）
+> 版本：P2.24（2026-10-13，AI 调用接入 new-api 自托管网关；同日完成
+> 双渠道配置与 failover 实测，见第四/五/六节实测结论）
 > 目标：多上游渠道（DashScope 千问 / 火山方舟豆包等）统一接入、额度耗尽
 > 自动切换（failover）、用量与成本集中可见。
 
@@ -68,60 +69,65 @@ curl -s http://127.0.0.1:3001/api/status   # HTTP 200 即存活
 
 ---
 
-## 四、渠道配置（控制台操作）
+## 四、渠道配置（2026-10-13 已完成，本机实测）
 
-1. 登录 `http://127.0.0.1:3001` 控制台 → 渠道 → 添加渠道：
-   - **渠道 1（主）DashScope**：类型选「阿里云」或 OpenAI 兼容自定义，
-     Base URL `https://dashscope.aliyuncs.com/compatible-mode/v1`，
-     模型列表填 `qwen-flash,qwen3-vl-plus,qwen3-asr-flash`，
-     priority 设高（如 10）。
-   - **渠道 2（备）火山方舟**（拿到 Key 后加）：OpenAI 兼容，
-     Base URL `https://ark.cn-beijing.volces.com/api/v3`，模型填豆包
-     文本/视觉系列（如 `doubao-seed-1-6...`），priority 设低（如 5），
-     并在「模型映射」里把 `qwen-flash→豆包文本`、`qwen3-vl-plus→豆包视觉`。
-   - 同名模型多渠道并存时，网关按 priority 从高到低尝试。
-2. 控制台 → 令牌 → 新建令牌（限定可用模型与额度），得到 `sk-` 开头的
-   **网关令牌**——填入 SubFlow 的 `AI_GATEWAY_API_KEY`。
-3. SubFlow `.env` 配置：
+当前生产配置（可直接对照控制台检查）：
+
+1. **渠道 1（主）dashscope-primary**（priority 10）：类型 OpenAI 兼容，
+   Base URL `https://dashscope.aliyuncs.com/compatible-mode`
+   （**不要带 `/v1`**——new-api 会把客户端路径 `/v1/chat/completions`
+   原样拼到 Base URL 后，带了会变成 `/v1/v1/...` 报 404），
+   模型 `qwen-flash,qwen3-vl-plus,qwen3-asr-flash`。
+2. **渠道 2（备）volcengine-ark**（priority 5）：类型火山方舟（type 45），
+   模型含 `doubao-seed-2-1-lite-260915` + 两个映射名，模型映射：
+   `qwen-flash / qwen3-vl-plus → doubao-seed-2-1-lite-260915`；
+   「参数覆盖」填 `{"thinking":{"type":"disabled"}}` 关闭豆包思考链
+   （实测省 ~50 tokens/次，响应不再带 reasoning_content）。
+   映射里**不含 qwen3-asr-flash**（格式互斥，见第五节）。
+3. **运营设置 → 重试次数（RetryTimes）= 3**——默认 0 时任何错误都直接
+   透传、**不会 failover**；403 额度耗尽在默认重试状态码范围（401-407）内，
+   开启后即自动切换。
+4. 令牌 `subflow`（限 qwen-flash / qwen3-vl-plus / qwen3-asr-flash 三模型），
+   完整 key 经 `POST /api/token/{id}/key` 获取（列表页只显示打码值）。
+5. SubFlow `.env` 已配置：
 
 ```bash
 AI_GATEWAY_BASE_URL="http://127.0.0.1:3001/v1"
 AI_GATEWAY_API_KEY="sk-xxxxxxxx"
 ```
 
-4. 验证（对网关直接发起，不经 SubFlow）：
+---
 
-```bash
-curl http://127.0.0.1:3001/v1/chat/completions \
-  -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"qwen-flash","messages":[{"role":"user","content":"回复OK"}]}'
-```
+## 五、渠道能力边界（2026-10-13 实测修正）
+
+- **润色/翻译/OCR 可 failover 到火山豆包**（已实测通过）：映射
+  `qwen-flash / qwen3-vl-plus → doubao-seed-2-1-lite-260915`，
+  禁用主渠道后请求自动落火山，`model` 字段显示映射后模型名；
+  恢复主渠道后流量自动回切。
+- **同步 ASR 不可 failover（格式互斥，实测确认）**：doubao-seed-2-1 系列
+  虽支持 `input_audio` 音频转写，但火山要求 base64 **不带** data URI 前缀，
+  DashScope qwen3-asr 要求**必须带** `data:audio/mp3;base64,`（同参数格式
+  另一家直接报 `expected an object, but got null`）——同一份代码无法双兼容，
+  故火山渠道映射中不含 qwen3-asr-flash；DashScope 不可用时同步 ASR 靠
+  BullMQ 队列持久化兜底（恢复后自动重试，用户感知是延迟而非丢失）。
+- `qwen-filetrans`（异步文件转写）为 DashScope 专有协议，无法网关化，
+  同样靠队列兜底。
 
 ---
 
-## 五、渠道能力边界（调研结论，2026-10）
+## 六、试点验证清单（2026-10-13 实测结果）
 
-- **火山方舟 Chat 只有文本与视觉两种形态**（OpenAI 兼容），没有音频输入
-  的 chat 模型 → 润色/翻译/OCR 可 failover 到豆包，**同步 ASR 不行**。
-- 火山语音识别是独立产品线（专有协议），如需 ASR 双渠道需单独对接
-  （或引入 SiliconFlow 等 whisper 兼容接口）——暂缓，先靠队列缓冲兜底。
-- `qwen-filetrans`（异步文件转写）为 DashScope 专有协议，无法网关化；
-  DashScope 账户没余额时它同样不可用——靠 BullMQ 任务持久化 + 恢复后
-  自动重试兜底（用户感知是延迟而非丢失）。
-
----
-
-## 六、试点验证清单（启用网关后逐项过）
-
-- [ ] `curl /v1/models` 能列出网关配置的模型；
-- [ ] 润色/翻译走网关出结果（上传转写一条 35s 样片全链路）；
-- [ ] **同步 ASR 的 `asr_options` 透传**：qwen3-asr-flash 请求体顶层的
-  `asr_options`（language/enable_itn）可能被网关结构化转发剥离——
-  实测指定语言（如粤语）转写是否仍准确、数字是否转阿拉伯数字；
-  若被剥离，在该渠道设置中开启透传/原始请求模式后复测；
-- [ ] 停用主渠道（模拟额度耗尽）→ 请求自动落到备用渠道成功；
-- [ ] 恢复主渠道 → 网关重新分流回主渠道。
+- [x] 主渠道正常出结果：qwen-flash / qwen3-vl-plus 经网关均返回成功；
+- [x] **failover**：禁用主渠道 → 请求自动落火山（模型映射生效）；
+      恢复主渠道 → 流量自动回切；
+- [x] **额度耗尽自动切换**：DashScope 返回 403（FreeTierOnly，免费额度
+      用尽）时网关自动重试落火山——前提 RetryTimes > 0（默认 0 不重试）；
+- [x] **豆包思考链关闭**：param_override 生效，completion_tokens 52 → 1；
+- [ ] **asr_options 透传实测（挂起）**：DashScope 账户 qwen3-asr-flash
+      免费额度已耗尽（403 AllocationQuota.FreeTierOnly），需到百炼控制台
+      为该模型开通按量付费后补测：指定语言（如粤语）+ ITN 数字转写是否
+      仍准确。**开通前本地同步 ASR（qwen3-asr-flash）不可用**；
+      生产异步转写（qwen-filetrans/paraformer）计费独立，暂不受影响。
 
 ---
 
