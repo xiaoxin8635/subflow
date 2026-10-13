@@ -117,6 +117,16 @@ AI 短视频字幕生成工具：上传视频 → 千问 ASR 语音转写 → LL
       chips + 下方动态 hint 行；「识别设置」收成折叠条（收起显示当前值摘要
       如「通用 · 中文（普通话）」，上传中禁改）；上传按钮内衬批量整体进度条；
       新增 `rise-in`/`pop-in` 微动效（尊重 prefers-reduced-motion）
+- [x] **P2.22 定价页免费档修复**：[pricing/page.tsx](src/app/pricing/page.tsx) + [seed.mjs](prisma/seed.mjs) + [page.tsx](src/app/page.tsx) + [invite/page.tsx](src/app/dashboard/invite/page.tsx)
+      「免费体验」档数据与渲染对齐真实语义（原 ¥0 却展示「/月」「每月 0 秒
+      转写额度」并引导扫码付款）——pricing 页按 `priceCents === 0` 分流：
+      去掉「/月」后缀、权益行改「注册即得 N 额度」（引用
+      `SIGNUP_BONUS_SECONDS` 单一来源，注意用 formatSecondsLabel 而非页面
+      局部 formatSeconds——后者只处理整小时，1800 秒会外露「1800 秒」）、
+      CTA 改「免费注册」进登录页；seed 与本地 DB 的免费档 description
+      同步去重复（「注册即用，体验完整转写流程」）；顺手清除首页 STEPS/
+      PRICING/hero 与邀请页共 4 处「30 分钟」硬编码（全部改引用常量，
+      env 覆盖后文案自动跟随）
 - [x] **P2.21 项目卡片重排**：[page.tsx](src/app/dashboard/page.tsx) + [format.ts](src/lib/format.ts)
       工作台列表卡信息密度提升（数据与链接零改动）——标题下新增媒体类型
       标识（播放框/波形 stroke 小图标 + 视频/音频）；更新时间从标题下方
